@@ -1,6 +1,22 @@
 # Secrets & tokens
 google_token.json
 **/google_token*.json
+google_client_secret.json
+auth.json
+auth.lock
+gateway.lock
+gateway_state.json
+gateway/
+processes.json
+pairing/
+.update_check
+
+# Discord / pairing / state files
+channel_directory.json
+interrupt_debug.log
+context_length_cache.yaml
+ollama_cloud_models_cache.json
+provider_models_cache.json
 
 # Python cache
 __pycache__/

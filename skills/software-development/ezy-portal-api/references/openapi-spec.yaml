@@ -1,0 +1,138 @@
+# OpenAPI/Swagger 2.0 Specification Reference
+
+**Source file:** `mi-cerebro/hermes/knowledge/ezy_portal/ezy_rules.md` (lines 1–3737)
+
+The full YAML OpenAPI 2.0 specification is stored in the above file. This reference documents how to access it.
+
+## Accessing the Spec
+
+```bash
+# View the YAML portion (authoritative spec)
+head -n 3737 ~/mi-cerebro/hermes/knowledge/ezy_portal/ezy_rules.md
+
+# Or extract to a standalone file
+sed -n '1,3737p' ~/mi-cerebro/hermes/knowledge/ezy_portal/ezy_rules.md > ezy-portal-openapi.yaml
+```
+
+## Spec Structure
+
+```
+swagger: "2.0"
+info:
+  contact: {}
+paths:                    # 36 endpoints across 8 tags
+  /api/items/validate-barcode
+  /barcodes
+  /categories
+  /categories/{id}
+  /categories/mappings
+  /categories/mappings/{item_id}/{category_id}
+  /internal/items/{id}/stock
+  /item-groups
+  /item-groups/{id}
+  /item-groups/by-code/{code}
+  /items
+  /items/by-code/{code}
+  /items/by-ext
+  /items/filters/tags
+  /items/select
+  /items/validate-code
+  /items/validate-sku
+  /items/{id}
+  /items/{id}/barcodes
+  /items/{id}/barcodes/{barcode_id}
+  /items/{id}/restore
+  /items/{id}/uoms
+  /items/{id}/uoms/{uom_id}
+  /stats
+  /stats/quality
+  /trash/items
+  /uom-groups
+  /uom-groups/{id}
+  /uom-groups/by-code/{code}
+  /uom-groups/{id}/members
+  /uom-groups/{id}/members/{member_id}
+  /uom/{id}
+definitions:              # 63 model definitions
+  github_com_ezy-ts_portal-business_internal_modules_items_models.JSONB
+  handlers.getItemsByExtRequest
+  itemPrice.BulkUpsertItem
+  models.BarcodeType
+  models.ClassCount
+  models.GroupCount
+  models.InitialBarcodeInput
+  models.Item
+  models.ItemBarcode
+  models.ItemBarcodeCreateRequest
+  models.ItemBarcodeInput
+  models.ItemBarcodeUpdateRequest
+  models.ItemCategory
+  models.ItemCategoryCreateRequest
+  models.ItemCategoryInput
+  models.ItemCategoryMap
+  models.ItemCategoryMapCreateRequest
+  models.ItemCategoryResponse
+  models.ItemCategoryUpdateRequest
+  models.ItemClass
+  models.ItemCreateRequest
+  models.ItemDataQualityStats
+  models.ItemGroup
+  models.ItemGroupCreateRequest
+  models.ItemGroupListResponse
+  models.ItemGroupResponse
+  models.ItemGroupUpdateRequest
+  models.ItemResponse
+  models.ItemStats
+  models.ItemType
+  models.ItemUOM
+  models.ItemUOMCreateRequest
+  models.ItemUOMInput
+  models.ItemUOMUpdateRequest
+  models.ItemUpdateRequest
+  models.LocalItemPriceResponse
+  models.LocalPriceList
+  models.SyncState
+  models.UOM
+  models.UOMGroup
+  models.UOMGroupCreateRequest
+  models.UOMGroupMember
+  models.UOMGroupMemberCreateRequest
+  models.UOMGroupUpdateRequest
+  models.VariantChildResponse
+  models.VariantDimensionType
+  models.VariantGroup
+  models.VariantGroupDimension
+  models.VariantGroupType
+  models.VariantGroupValue
+  models.VariantMatrixResponse
+  queryutil.UserDTO
+securityDefinitions:
+  BearerAuth:
+    type: apiKey
+    name: Authorization
+    in: header
+  CookieAuth:
+    type: apiKey
+    name: session
+    in: cookie
+```
+
+## Using with Code Generators
+
+```bash
+# Generate TypeScript client (openapi-generator)
+openapi-generator generate -i ezy-portal-openapi.yaml -g typescript-axios -o ./client
+
+# Generate Python client
+openapi-generator generate -i ezy-portal-openapi.yaml -g python -o ./client
+
+# Validate spec
+swagger-codegen validate -i ezy-portal-openapi.yaml
+```
+
+## Postman Collection (embedded in source file lines 19–116)
+
+Collection: "Portal Business — Items with Pricing (Tenant API Key)"
+- Base URL: `https://app.portal.net`
+- Auth: `X-Api-Key` header with `{{TENANT_API_KEY}}` (prefixed `ten_`)
+- 3 example requests: List with pricing, Filtered sellable active, Get by code

@@ -1,0 +1,44 @@
+{
+  "jobs": [
+    {
+      "id": "35acdf4398c0",
+      "name": "alohomora weekly backup",
+      "prompt": "Run the alohomora.py backup script to sync EZY Portal items to Airtable.\n\nScript path: /Users/abrahamkortovich/.hermes/profiles/ezy_portal_expert/skills/software-development/ezy-portal-api/scripts/alohomora.py\nAPI key: ten_YrYLEy8rbp6rCujH1emWh2SZBJOtVemuj4YfF0MFu3I\n\nRun command: /Users/abrahamkortovich/.hermes/hermes-agent/venv/bin/python3 /Users/abrahamkortovich/.hermes/profiles/ezy_portal_expert/skills/software-development/ezy-portal-api/scripts/alohomora.py ten_YrYLEy8rbp6rCujH1emWh2SZBJOtVemuj4YfF0MFu3I\n\nJust run it and report the output. If there are errors, include them in the report.",
+      "skills": [
+        "software-development:ezy-portal-api"
+      ],
+      "skill": "software-development:ezy-portal-api",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 * * 0",
+        "display": "0 9 * * 0"
+      },
+      "schedule_display": "0 9 * * 0",
+      "repeat": {
+        "times": 7,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-23T15:49:45.018880-05:00",
+      "next_run_at": "2026-07-05T09:00:00-05:00",
+      "last_run_at": "2026-06-28T10:07:41.129284-05:00",
+      "last_status": "error",
+      "last_error": "TimeoutError: Cron job 'alohomora weekly backup' idle for 923s (limit 600s) \u2014 last activity: terminal command running (111s elapsed)",
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null
+    }
+  ],
+  "updated_at": "2026-06-28T10:07:41.129921-05:00"
+}

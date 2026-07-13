@@ -1,0 +1,6 @@
+Dueño/admin del portal vivero.ezyts.com, cadena SUPER EXTRA (10+ sucursales). Conoce bien su negocio y stock. Prefiere órdenes de venta (SO), no cotizaciones. Usa Google Sheet INVENTARIO con columnas: PLANTA, FOTO, STOCK, COST_MIJARDIN, COST_SARACELY, COST_HACIENDA, COST_EDWIN, COST_SUGEY, COST_A&G. Tierras/abonos al final del sheet. Procesa facturas Vivero Rose → SOs. Tiene múltiples keys API con diferentes permisos (items general vs purchase orders).  
+Estilo: comandos directos sin explicación, respuestas concisas, "dle" para confirmar. Si falla un enfoque, prueba alternativas (nuevas API keys, diferentes tools). Paciente con issues técnicos (OAuth, permisos macOS).
+§
+Confirma antes de crear. Usa SALE_SUPER. Mollejas, no mollejitas. Excluye N/C, no-plantas. Zamioculca, no millonaria. Sinónimos: Bombero=Romero, Chocolate=Chavelitas, MiniUvas=Eliminar, Novias=NovioChino. Cactus mediano=PL cactus. Revisa contra Airtable para stock real. Prefiere resumen pre-creación.
+§
+Procesa facturas en lote rápido — solo dice nombre sucursal, no pide resumen. Items nuevos se crean on-the-fly sin preguntar. Stock irrelevante para tierras/abonos. Grupo TIERRAS para no-plantas.

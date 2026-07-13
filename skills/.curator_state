@@ -1,0 +1,9 @@
+{
+  "last_report_path": "/Users/abrahamkortovich/.hermes/profiles/ezy_portal_expert/logs/curator/20260708-183218",
+  "last_run_at": "2026-07-08T18:32:18.787318+00:00",
+  "last_run_duration_seconds": 3.889982,
+  "last_run_summary": "auto: no changes; llm: skipped (consolidation off)",
+  "last_run_summary_shown_at": null,
+  "paused": false,
+  "run_count": 3
+}

@@ -1,0 +1,930 @@
+---
+name: ezy-portal-api
+description: "Class-level skill for working with EZY Portal REST API (Items, Categories, Item Groups, UOM Groups, Barcodes, Variants, Stats, Pricing, Sales Quotations). Covers authentication, endpoints, data models, pagination, masking, optimistic concurrency, variant handling, and the vivero tenant workflow."
+category: software-development
+tags: [ezy, portal, api, rest, items, inventory, pricing, vivero]
+metadata:
+  hermes:
+    tags: [ezy, portal, api, rest, items, inventory, pricing, vivero]
+    homepage: https://docs.ezyts.com/en/portal/
+---
+
+# EZY Portal API Development Skill
+
+## When to Use
+- Building integrations with EZY Portal (Items, Catalog, Pricing, Inventory, Sales Quotations, Business Partners)
+- Writing API clients, scripts, or automation against `https://<tenant>.ezyts.com`
+- Debugging API responses, pagination, masking, or variant matrix behavior
+- Creating/updating items with nested prices, UOMs, barcodes, categories
+- Creating or editing Sales Quotations (draft quotes)
+- **Always load this skill first** before any EZY Portal work. The skill contains all endpoint URLs, auth patterns, pitfalls, and vivero-specific quirks.
+
+## Authentication
+
+| Endpoint Group | Auth Method | Header |
+|----------------|-------------|--------|
+| Items, Pricing-Tax, Commerce, Business Partners, Stats | Tenant API Key | `X-Api-Key: ten_...` |
+| Accounts, Categories | Bearer JWT | `Authorization: Bearer <jwt>` |
+
+**Critical**: Items and Accounts use DIFFERENT auth on the SAME domain. `X-Api-Key` works for Items but returns 401/404 for Accounts/Categories.
+
+## Base URL
+```
+https://vivero.ezyts.com
+```
+
+## Key Endpoints
+
+### Items
+- `GET /api/items/items` — List (filters: `isActive`, `isSellable`, `query`, `sortBy`; expand: `prices`, `itemUoms`)
+- `POST /api/items/items` — Create (omit `initialUOMs`, use `baseUom: "EA"`)
+- `PATCH /api/items/items/{id}` — Update by UUID (NOT itemCode); requires `version` for optimism
+- `GET /api/items/items/{id}` — Full detail
+- `GET /api/items/items/by-code/{code}?expand=prices` — Lookup by itemCode (this endpoint returns prices even when list endpoint doesn't)
+- `DELETE /api/items/items/{id}` — Soft delete (isActive=false)
+- `GET /api/item-groups?perPage=50` — List item groups (response may be dict `{data: [...]}` or flat list)
+- `POST /api/items/item-groups` — Create item group (requires `code`, `name`, `description`; tested Jul 2026)
+- `GET /api/item-classes?perPage=50` — List item classes (response may be flat list, not paginated dict)
+
+### Pricing-Tax
+- `GET /api/pricing-tax/price-lists?perPage=50` — List all price lists (paginated response: `{data: [...], hasMore, total}`)
+
+### Sales Quotations
+- `GET /api/commerce/sales-quotations?expand=lines` — List (always use expand)
+- `POST /api/commerce/sales-quotations` — Create (accepts `lines[]` inline)
+- `PATCH /api/commerce/sales-quotations/{id}` — Update draft
+
+### Business Partners
+- `GET /api/business-partners/bp` — List (paginated)
+- `POST /api/business-partners/bp` — Create (requires `Idempotency-Key` header)
+  - **⚠️ Campo `code`, NO `bpCode`**: El payload usa `"code": "CL-XXXX"`, no `"bpCode"`. Usar `bpCode` da error `"Business partner code is required"`.
+  - **Requiere `roles`**: Incluir `"roles": ["customer"]` — sin roles da error `"roles is required"`.
+  - Payload mínimo funcional (probado Jul 2026):
+    ```python
+    {
+        "code": "CL-0032",
+        "name": "Super Extra Villa Lobos",
+        "bpType": "customer",
+        "roles": ["customer"]
+    }
+    ```
+
+### Payment Terms
+- `GET /api/business-partners/payment-terms` — Returns FLAT LIST (not paginated dict). No `data` wrapper.
+- Available (Jul 2026 vivero): COD (Contra Reembolso), DUE_RECEIPT, NET15/30/45/60/90, PREPAY
+- **Verified working ID for SO creation (Aug 2026)**: `9025dae9-6d36-465b-a98f-733966ef8f37` (used by Viveros Mi Jardin and Viveros Ian BPs). The `/api/pricing-tax/payment-terms` endpoint returns 404 — use BP payment terms IDs directly.
+- `paymentTermsId` is REQUIRED at top level for SO creation.
+
+### Warehouses
+- `GET /api/inventory/warehouses` — Returns FLAT LIST. Endpoint is `/api/inventory/warehouses`, NOT `/api/warehouses` (404) or `/api/warehouses/warehouses` (404).
+- **Pitfall**: Warehouse endpoint returns flat array, not paginated dict. Confirmed PRINCIPAL warehouse: `95c298a9-54d8-4c51-ae78-5c3b76cac657` (code: PRINCIPAL, name: ALMACEN PRINCIPAL).
+- Available (Jul 2026 vivero): code=`PRINCIPAL`, name=`ALMACEN PRINCIPAL`, description=`METRO PARK`
+
+## Pagination\n- `page`, `perPage` — **max ~25 per page on vivero tenant** (perPage=29 works, perPage=30+ returns 400 `Invalid query parameters`)\n- Response: `total`, `hasMore`\n- Always paginate — use perPage=25 and iterate via `hasMore`\n- Example pagination loop:\n```python\npage = 1\nwhile True:\n    url = f\"{PORTAL_URL}/api/items/items?isActive=true&perPage=25&page={page}\"\n    # ... fetch via curl subprocess ...\n    items = data.get(\"data\", [])\n    if not items or not data.get(\"hasMore\"):\n        break\n    page += 1\n```
+
+## vivero Tenant (Panamá)
+
+### User Preferences
+- **Language**: Spanish only. Respond concisely — no explanations, no theory, no "what would you like to do next". Just data, status, next action.
+- **Style**: Deliver working artifacts backed by real tool output. Do not stop after writing a plan or stub. Keep executing until the artifact is complete.
+- **Data integrity is critical**: If a dedup check produces a skip list, the user expects those items to ALSO end up in the target sheet, not just the portal. Missing data will be caught and called out.
+- **Report final counts clearly**: "44 created, 47 skipped, 210 total in sheet" — tabular, not prose.
+
+### Item Code Convention
+Pattern: `PL-` + UPPERCASE_NAME_WITH_DASHES. Name and code must match: name `LIRIO GIGANTE` → code `PL-LIRIO-GIGANTE`.
+
+### Code Generation with Parentheses Conflict Resolution
+
+When generating item codes from sheet names containing parenthetical content (e.g. "FICUS LYRATA (HASTA 200CM)", "GUAYACAN ENANO (TECOMA)"):
+
+**Rule: "no pongas el paréntesis en el código sino el nombre"** — keep parentheses in the display name but strip them from the code. Use a dual-function approach:
+
+```python
+def slugify(name):
+    """Normalize name for code — strips parenthetical content entirely"""
+    s = re.sub(r"\s*\([^)]*\)", "", name.strip()).strip()
+    s = s.upper()
+    s = s.translate(str.maketrans("ÑÁÉÍÓÚÜ", "NAEIOUU"))
+    s = re.sub(r"[^A-Z0-9\s]", "", s)
+    s = re.sub(r"\s+", "-", s.strip())
+    return s
+
+def slugify_raw(text):
+    """Normalize text WITHOUT stripping parentheses — for conflict suffix extraction"""
+    s = text.strip().upper()
+    s = s.translate(str.maketrans("ÑÁÉÍÓÚÜ", "NAEIOUU"))
+    s = re.sub(r"[^A-Z0-9\s\(\)]", "", s)
+    s = re.sub(r"\s+", "-", s.strip())
+    s = re.sub(r"[()]", "", s)
+    return s
+```
+
+**Conflict detection**: After generating `PL-` + slugify(name), check if the code already exists in a `seen_codes` set. If it does:
+
+```python
+paren_match = re.search(r"\(([^)]*)\)", name)
+if paren_match:
+    extra = slugify_raw(paren_match.group(1))  # e.g. "HASTA-200CM"
+    code = base_code + "-" + extra               # e.g. PL-FICUS-LYRATA-HASTA-200CM
+```
+
+**Real example (Jul 6 2026)**:
+| Sheet name | Code (auto) |
+|---|---|
+| FICUS LYRATA | PL-FICUS-LYRATA |
+| FICUS LYRATA (HASTA 200CM) → renamed to FICUS LYRATA GRANDE | PL-FICUS-LYRATA-GRANDE |
+| FICUS LYRATA 3 RAMAS (HASTA 175CM) | PL-FICUS-LYRATA-3-RAMAS |
+
+Note: "FICUS LYRATA 3 RAMAS" slugifies to "FICUS-LYRATA-3-RAMAS" (different from "FICUS-LYRATA") so it doesn't need a parenthetical suffix. Only when the base slugify output is identical does the conflict resolver activate.
+
+### Code Convention for Non-Plant Items
+
+Items that are NOT plants (cajas, soils, supplies, etc.) get codes WITHOUT the `PL-` prefix:
+- `CAJA POTE 120_1000PCS` → `CAJA-POTE-1201000PCS`
+- `CAJA POTE 180_450PCS` → `CAJA-POTE-180450PCS`
+- `TIERRA NEGRA` → `TIERRA-NEGRA`
+- `ABONO ORGANICO` → `ABONO-ORGANICO`
+- `CASCARILLA DE ARROZ` → `CASCARILLA-DE-ARROZ`
+
+These are still created as `itemType: "stock"`, `isSellable: true` — they are valid sellable items, just with a different code convention.
+
+**Soil items pattern (Jul 2026)**: When the user asks to include soils/fertilizers/substrates (tierra negra, abono org anico, cascarilla de arroz) in a sales order:
+1. Create the items first under the TIERRAS item group if they don't exist
+2. Use codes WITHOUT PL- prefix
+3. Include them in the SO at invoice prices just like plant items
+4. The user explicitly permits zero-stock items (no importa que no tenga stock)
+
+**Soil item IDs (verified Jul 9 2026)**:
+| Code | ID |
+|------|-----|
+| TIERRA-NEGRA | fa5966d6-e11e-402b-bc0a-eba245eab0a2 |
+| ABONO-ORGANICO | 96acf659-aae3-471d-b219-e16b35a2f44a |
+| CASCARILLA-DE-ARROZ | 7c01f7e4-3fb4-4932-a835-5872f5caaa69 |
+
+### Stock Field
+Use `itemStockTotal` — NOT `stockTotal` (doesn't exist). Use `itemAvailableTotal` for stock excluding pending orders.
+
+### Price List IDs (Verified Jul 2026)
+
+Current active price lists (always verify fresh each session):
+
+| Code | ID | Note |
+|------|-----|------|
+| COST_A&G | 3957783e-b384-4bf9-a6a5-7982f7ad8d2f | |
+| COST_EDWIN | d1eeecb8-e5a8-4f89-90d8-fc4a6480f902 | |
+| COST_HACIENDA | 0dbfdd7b-db25-4040-a90b-5f452378de86 | |
+| COST_SUGEY | e38bab32-70c5-4b66-b16c-dc5cdb2dbaa4 | New Jul 2026 |
+| COST_SARACELY | 65399687-8f36-46af-8145-01b5d50198f0 | New Jul 2026 |
+| COST_MIJARDIN | fbd1e2fc-9386-4e7b-b8ee-b4ec501eead1a | New Jul 2026 |
+| **SALE_EXTRA** | **13ce22b6-0b29-4029-be65-42e8c23cb239** | **Only active sales price list (Aug 2026). SALE_PUBLIC and SALE_SUPER no longer exist.** Use for ALL Super Xtra branches. |
+
+> **CRITICAL**: `SALE_PUBLIC` and `SALE_SUPER` **no longer exist** in the tenant as of Jul 2026. If you need a sales price list, use `SALE_EXTRA`.
+> 
+> `COST_IAN`, `COST_JARDIN`, `COST_SARA`, `COST_ISMAEL`, and `COST_EDUARDO` also do not exist in the current tenant. Always verify via `GET /api/pricing-tax/price-lists?perPage=50` each session.
+
+### Item Group & Class (fetch fresh each session, DO NOT hardcode)
+Fetch at the START of every session:
+```
+GET /api/items/item-groups?perPage=50
+GET /api/items/item-classes?perPage=50
+```
+
+**Complete groups (verified Jul 9 2026):**
+| Code | Name | ID |
+|------|------|-----|
+| GRUPO 01 | SUCULENTAS | 32c76abf-b2be-4def-93d7-46b262a4ea20 |
+| GRUPO 02 | CACTUS | e30fbc6e-fb47-42af-b044-7fd309090d4c |
+| GRUPO 03 | ARBOLES | e5518457-841e-40c1-85b9-95058fc1969f |
+| GRUPO 04 | MEDICINALES | 529c8879-c1df-4a3f-98d2-b0f65f16cce1 |
+| GRUPO 05 | ORNAMENTALES | 63514ee2-a63a-4a4f-b8da-0bd13c27e09d |
+| GRUPO 06 | TIERRA | 11e4264c-6f58-4873-8005-8349a76ee891 |
+| TIERRAS | TIERRAS | 14fb3ff0-16fa-43dc-9871-292adc5dbd7e |
+
+**To create a new item group:**
+```
+POST /api/items/item-groups
+{"code": "TIERRAS", "name": "TIERRAS", "description": "Tierras, abonos y sustratos"}
+```
+
+No item classes exist on the vivero tenant as of Jul 2026 (endpoint returns empty list).
+**"Item class not found" error means the IDs are stale** — re-fetch immediately.
+
+### Purchase Orders — API (discovered Jul 10 2026)
+
+**Endpoint**: `GET /api/commerce/purchase-orders` for listing, `GET /api/commerce/purchase-orders/{id}?expand=lines` for single PO with line items.
+
+**Keys**: As of Jul 10 2026, the IK key (`ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE`) DOES work for both items + POs + SOs. The PRQ key (`ten_PRQ2XeyfLOvi_8Vf1528LoJgV7IlTqTqcQi5LLO4owg`) expired mid-session. The old key (`ten_6lRpIW7SBXsZOHylXp80MTf-qFAdW-DjKWJITOdF6bk`) also expired earlier. ⚠️ API keys may be silently rotated mid-session — when you get sudden 401, try an alternative key or ask the user.
+
+**List quirks**: `expand=lines` on the LIST endpoint returns POs with empty `lines` array. Only fetch by single UUID returns actual line items with `unitPrice`. Always iterate: list first, then fetch each PO individually.
+
+**Cost extraction pattern**: Full dataset + script pattern in `references/purchase-orders-costs-20260710.md`.
+
+
+
+**Key endpoints**:
+- `GET /api/commerce/purchase-orders?perPage=50&page=1&expand=lines` — List with line items. Note: `expand=lines` in the LIST endpoint does NOT actually include line data. Lines only appear when fetching a SINGLE PO.
+- `GET /api/commerce/purchase-orders/{id}?expand=lines` — Single PO with full line items. Returns `unitPrice`, `quantity`, `lineTotal`, `itemCode`, `itemName`.
+- Fields per line: `itemId`, `itemCode`, `itemName`, `quantity`, `unitPrice`, `lineTotal`, `discountPercent`, `priceAfterDiscount`, `taxRate`, `taxAmount`, `orderedQty`, `fulfilledQty`, `fulfillmentStatus`, `warehouseId`, `warehouseCode`, `uomCode`.
+- Top-level fields: `documentNumber`, `bpName`, `bpCode`, `bpId`, `priceListCode`, `priceListId`, `paymentTermsId`, `subTotal`, `grandTotal`, `status`, `documentDate`, `deliveryDate`, `vendorRefNumber`.
+
+**Line item fields (from single PO fetch)**:
+```
+lineNumber, itemId, itemCode, itemName, description, quantity, unitOfMeasure,
+unitPrice, discountPercent, priceAfterDiscount, taxRate, taxAmount, lineTotal,
+taxCategoryId/Code/Name, orderedQty, fulfilledQty, fulfillmentStatus,
+warehouseId/Code/Name, uomCode, conversionFactor, baseQuantity
+```
+
+**⚠️ List vs Single endpoint quirk**: `GET /api/commerce/purchase-orders?expand=lines` returns POs with an empty `lines` array (or no key). Only `GET /api/commerce/purchase-orders/{id}?expand=lines` returns actual line items. To extract costs from all POs, iterate: list POs first, then fetch each one individually.
+
+### Supplier Cost Price Lists (discovered Jul 10 2026)
+
+The portal tracks costs per supplier via separate price lists. Verified suppliers and their cost price lists:
+
+#### Viveros Mi Jardin (COST_MIJARDIN) — 33 items
+Largest supplier. Items include AJI BOLITA, ALBAHACA VERDE, CACTUS MEDIANO, CHAVELITAS, CINTA, CORONITA, CRISANTEMOS, HIERBA BUENA, JADE, MENTA, MINI JADE, NOVIO CHINO, ROMERO, RUDA, TORENIA, and more. Price list ID: `fbd1e2fc-9386-4e7b-b8ee-b4ec501eead1a`.
+
+| Item Code | Cost |
+|---|---|
+| PL-AJI-BOLITA | $1.50 |
+| PL-CACTUS-MEDIANO | $1.00 |
+| PL-CHAVELITAS | $1.00 |
+| PL-CRISANTEMOS | $1.50 |
+| PL-HIERBA-BUENA | $0.80 |
+| PL-JADE | $0.95 |
+| PL-MENTA | $0.80 |
+| PL-MINI-JADE | $0.85 |
+| PL-NOVIO-CHINO | $1.00 |
+| PL-ROMERO | $0.75 |
+| PL-RUDA | $0.75 |
+| PL-TOMILLO | $0.80 |
+| PL-TORENIA | $0.80 |
++ 20 more (see full dataset in references/supplier-costs-20260710.md)
+
+#### HACIENDA CAFETALERA (COST_HACIENDA) — 27 items
+Premium plants. Price list ID: `0dbfdd7b-db25-4040-a90b-5f452378de86`. Items include ANTORCHA ($20), BICOLOR ($5), CALATHEA CEBRINA ($10), DURANTA MATIZADA ($25), LIRIO ($30), ORTENCIA ($7), PALMA PINANGO ($35), and more.
+
+#### DISTRIBUIDORA CHIRIQUI (COST_EDWIN) — 12 items
+Price list ID: `d1eeecb8-e5a8-4f89-90d8-fc4a6480f902`. Items include ALBAHACA VERDE ($0.80), CINTA ($0.80), CLAVEL CHINO ($0.80), MILLONARIA ZAMIOCULCA ($3.00), SALVIA ESPLENDA ($0.80), SANSEVIERIA ($2.00).
+
+#### Agro&Gardens (COST_A&G) — 8 items
+Price list ID: `3957783e-b384-4bf9-a6a5-7982f7ad8d2f`. Items include AGAVE AMARILLO ($5), MONSTERA DELICIOSA ($4.50), PHILODENDRO NEON ($3), PALMA BISMARKIA GRANDE ($20).
+
+#### Vivero Sara Cely (COST_SARACELY) — 8+ items (many pending)
+Price list ID: `65399687-8f36-46af-8145-01b5d50198f0`. Current portal items include APIO ($1.50), CIELITO AZUL ($0.85), MILLONARIA ZAMIOCULCA ($4.50), MILLONARIA ZAMIOCULCA NEGRA ($8), MOLLEJA ($0.85).
+**Jul 2026**: User has a larger list of ~60 items with costs from Saracely (long descriptive names with pot sizes). NOT loaded yet — user said "no metas los costos todavía". See `references/cost-saracely-mapping-20260710.md` for the full mapping.
+
+#### Vivero Sugey (COST_SUGEY) — 5 items
+Price list ID: `e38bab32-70c5-4b66-b16c-dc5cdb2dbaa4`. Items include PALMA ABANICO ($3), PALMA FENIX ($8), PALMA NAVIDAD ($7), PALMA ROJA GRANDE ($20), PALMA WASHINTONIA ($20).
+
+#### Viveros ian (COST_MIJARDIN — same price list as Viveros Mi Jardin) — 5 items
+Items include HIERBA BUENA ($0.80), MENTA ($0.80), ROSITA MINIATURA ($2), SUCULENTAS GRANDE ($2.25), SUCULENTAS MEDIANAS ($1.25).
+
+### Google OAuth Re-Authentication
+
+When the Google token expires (usually every 7 days), you get `invalid_grant: Token has been expired or revoked`. To re-authenticate:
+
+```bash
+# 1. Get auth URL
+~/.hermes/hermes-agent/venv/bin/python3 \
+  ~/.hermes/profiles/ezy_portal_expert/skills/productivity/vivero-google-sheets/scripts/setup.py \
+  --auth-url
+
+# 2. User opens URL in browser, authorizes, copies the redirect URL
+# 3. Exchange code
+~/.hermes/hermes-agent/venv/bin/python3 \
+  ~/.hermes/profiles/ezy_portal_expert/skills/productivity/vivero-google-sheets/scripts/setup.py \
+  --auth-code "http://localhost/?code=..."
+```
+
+The token is saved to `~/.hermes/profiles/ezy_portal_expert/google_token.json` and includes a refresh_token valid for ~7 days.
+
+### MCP (Model Context Protocol) Endpoint
+
+The portal exposes an MCP server at `https://<tenant>.ezyts.com/mcp` (e.g., `http://vivero.ezyts.com/mcp`). Requires Bearer `mcp_` token — different from the `ten_` API key. Create tokens in Portal UI: Settings > AI > MCP. 0 tokens active on vivero tenant (Jul 2026).
+
+To configure in Hermes:
+```
+hermes mcp add ezy-portal --url http://vivero.ezyts.com/mcp
+```
+
+### Google Sheet
+ID: `1jYZn3Kd8nIMlRxcQ1nC3K6C3pIzpGPemsO8bc4qG3NE`
+Tabs:
+- **INVENTARIO** (A=PLANTA, B=SALE_EXTRA, C=STOCK, D=COST_MIJARDIN, E=COST_SARACELY, F=COST_HACIENDA, G=COST_EDWIN, H=COST_SUGEY, I=COST_A&G) — ~190 rows. Sorted alphabetically by A. TIERRAS items at end.
+- **REPORTS** (A=PLANTA, B=COSTO, C=SALE, D=MARGIN %) — same row count as INVENTARIO. Cost shows range `$min-$max` when multiple suppliers. Margin shows range too.
+- **SOLD_AMOUNT** (⚠️ name has trailing space: `'SOLD_AMOUNT '`) — (A=PLANTA, B=AMOUNT_SOLD, C=TOTAL_COST, D=TOTAL_SALE, E=TOTAL). Last row = TOTAL sums.
+Token: `~/.hermes/profiles/ezy_portal_expert/google_token.json`
+
+**Sheet cleanup: clear+write pattern to avoid phantom duplicates**
+When using `svc.spreadsheets().values().update()`, old rows below the write range survive and create phantom duplicates on the next read. Always:
+1. Clear the range first
+2. Write new data
+3. Clear rows below
+```python
+def clear_and_write(svc, sheet_id, tab, data):
+    h,w = len(data), max((len(r) for r in data), default=0)
+    rng = f"'{tab}'!A1:{chr(64+w)}{h}"
+    svc.spreadsheets().values().clear(spreadsheetId=sheet_id, range=rng, body={}).execute()
+    svc.spreadsheets().values().update(spreadsheetId=sheet_id, range=rng,
+        valueInputOption="USER_ENTERED", body={"values": data}).execute()
+    svc.spreadsheets().values().clear(spreadsheetId=sheet_id,
+        range=f"'{tab}'!{chr(64+w)}{h+1}:Z999", body={}).execute()
+```
+
+**Verified item renames (Jul 10 2026)**:
+- POTHOS in sheet → renamed to PHOTUS (user confirmed POTHOS doesn't exist, only PHOTOS MULTI RAMA and PHOTUS exist)
+
+**Common issues**:
+- COST_SARACELY for tierras items (ABONO ORGANICO, TIERRA NEGRA, CASCARILLA DE ARROZ) should be EMPTY — user insists tierras have no cost from Saracely
+- Some items in REPORTS have RANGE costs like `$0.8-$1` instead of single values — these are from multiple supplier cost sources
+
+## Cloudflare SSL Workaround
+Python `urllib` against `vivero.ezyts.com` gets HTTP 403 (error 1010) without Mozilla User-Agent + SSL context:
+```python
+import ssl, urllib.request
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+req = urllib.request.Request(url)
+req.add_header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+```
+
+**⚠️ API key compatibility**: As of Jul 2026, **urllib WORKS with some keys and fails with others**:
+  - `ten_YdKacb...` (items+sales key) → urllib works fine on items, categories, sales-orders. Does NOT have PO access.
+  - `ten_PRQ2Xey...` (PO access key) → urllib works on commerce/purchase-orders. Does NOT have same items scope.
+  - `ten_6lRpIW...` (old key) → urllib works.
+  - When urllib gives 401 on any endpoint, switch to `curl` subprocess.
+  - Best practice: try urllib first, catch HTTP 401, fallback to curl. Keep both key options available. This happens in hermes-agent venv Python (uv-managed) even though curl works fine and the headers are correct. Use `curl` via subprocess for ALL portal API calls with these keys — do not use Python urllib:
+```python
+import subprocess, json
+result = subprocess.run(["curl", "-s", "-H", f"X-Api-Key: {API_KEY}", "-H", "User-Agent: Mozilla/5.0",
+    "https://vivero.ezyts.com/api/items/items?perPage=100&page=1"],
+    capture_output=True, text=True, timeout=30)
+data = json.loads(result.stdout)
+```
+
+### Sales Orders (SO) — New Endpoint (discovered Jul 2 2026)
+
+`POST /api/commerce/sales-orders` — Same payload structure as Sales Quotations, but produces `SO-` prefixed document numbers.
+
+Key differences from Sales Quotations:
+- **Status**: Always created as `DRAFT`; check `availableTransitions` to see next status
+- **Line validation is stricter**: `"Item: item is not active"` error if any line references an inactive item. Always verify `isActive=true` before adding to sales orders.
+- **priceListId REQUIRED at top level**: The SO endpoint returns `"price list is required"` if omitted. Pass `priceListId`, `priceListCode`, and `currency` alongside `paymentTermsId`. Verified: `priceListId: "13ce22b6-0b29-4029-be65-42e8c23cb239"`, `priceListCode: "SALE_EXTRA"`, `currency: "USD"`.
+- **SO requires MORE line-level fields than SQ**: `itemId`, `itemName`, `warehouseId`, `warehouseCode`, `warehouseName`, `taxCategoryId`, `taxCategoryCode`, `taxCategoryName`, `uomCode` — ALL are required. Missing any except itemCode gives `"incomplete data"`. Also needs `description` on each line.
+- **Item UUID drift (CRITICAL)**: The `/api/items/items` list endpoint and `/api/items/items/by-code/{code}` endpoint return DIFFERENT UUIDs for the same itemCode within the SAME session. The by-code endpoint returns the canonical IDs; the list endpoint returns stale/divergent IDs. Always fetch IDs fresh via by-code at session start. Using list-endpoint IDs in SO payloads gives `"Item: item not found"`.
+- **warehouseId is REQUIRED per line** (not just code/name)
+- **Field name**: `quantity` NOT `qty`
+- **Date format**: ISO 8601 with T (`"2026-06-05T00:00:00Z"`)
+- **Payment terms**: `paymentTermsId` is REQUIRED at top level. Verified working ID: `9025dae9-6d36-465b-a98f-733966ef8f37`. The endpoint `/api/pricing-tax/payment-terms` returns 404; use BP payment terms IDs directly.
+- **Reference**: use `"reference": "Factura No.{number}"` for invoice-linked orders.
+- **⚠️ BP code=None workaround**: BPs created via portal UI sometimes have `bpCode: null`. The SO endpoint validates `bpCode` as required — returns `"Key: 'CreateSalesOrderRequest.BPCode' Error:Field validation for 'BPCode' failed on the 'required' tag"`. Pass an arbitrary string as `bpCode` (e.g. "SABANITAS", "CONDADO") alongside `bpId` and `bpName`. The API stores it on the document.
+- **validUntil**: Set to `documentDate + 30 days` (e.g., `"2026-07-05T00:00:00Z"`).
+- **Response key**: uses `documentNumber` (NOT `orderNumber`). Response format: `{"id", "documentNumber": "SO-2026-000025", ...}`.
+- **Total**: May return `null` (`"totalAmount": null`) for draft orders — prices are calculated on finalization, not on draft creation.
+- **⚠️ Discount auto-application by portal (Jul 2026)**: The portal may auto-apply a `discountPercent` (e.g. 5%) to newly created SOs even when `discountPercent` is NOT included in the POST payload. This appears to be triggered by the payment terms config (`paymentTermsId: 9025dae9`). Observed on 5 SOs (CHITRE, LAS ACACIAS, EL LAGO, SANTIAGO TERMINAL, CHORRERA). **Always check `discountPercent` in the response after SO creation** — if it's > 0 and the user didn't ask for a discount, warn the user immediately. The user explicitly said: "no pongas ese descuento mas sin avisarme okay".
+- **Pre-creation summary**: MUST be a compact table — NOT verbose prose. Show: Cliente, Factura/N° referencia, Fecha, Líneas, Total. Ask "¿Creo la orden?" concisely. User responds with "dle" or "dle+" to confirm.
+- **urllib vs curl**: Some API keys (`ten_Zk271...`) work fine with Python urllib for SO creation; others (`ten_3HW_...`) get 401. Prefer curl via subprocess for reliability. For complex payloads (22+ lines), write to `/tmp/so_<branch>.json` first, then `curl -s -X POST ... -d @/tmp/so_<branch>.json`. The urllib approach (via execute_code) can succeed if item UUIDs are correct and the key supports it.
+- **Client IDs confirmed working Aug 2026**: 
+  - EL LAGO: `78532e5e-caa7-4863-aa80-7090e8e22257` (CL-0019)
+  - LOS PUEBLOS: `a8cea960-d200-4222-8654-6cda0093d6b9` (CL-0005)
+  - LAS TABLAS: `cbb72b57-a924-408d-9772-ca7de21834ae` (CL-0024)
+  - CHORRERA: `3d7f8040-61ea-45dd-b42d-97721513f018` (CL-0002)
+  - ALBROOK: `db64ad3e-a54c-4f15-b15b-d60dba3917a4` (CL-0017)
+  - MARQUEZA: `36ebc81e-c06d-450a-88e9-ad722e3bcd73` (CL-0030)
+  - BRISAS GOLF: `2c66161e-5906-4d59-afb7-5b3f815665d9` (CL-0031)
+  - VIA ISRAEL: `32249c40-4c89-4fdf-a381-73969dba188d` (CL-0035)
+  - XM Capira: `f8febfe4-e89c-4892-beee-eb771ac02a5e` (CL-0039)
+  - San Isidro: `04866578-7b69-4052-80e0-85e69eba4c90` (CL-0034)
+  - Santiago Terminal: `62755ad8-2b10-4bd7-8974-0f635a2a04ef` (CL-0021)
+  - La Siestas: `6edfbbad-3419-43bd-9128-68363f6f6d69` (CL-0202)
+  - Sabanitas: `e1df2e36-4388-4630-86b5-d73c0e668f99` (CL-0012)
+  - Chitre: `796f2a9e-4ef6-4720-a61b-d965fc75a95c` (CL-0011)
+  - Villa Lucre: `8ca7ecc1-dfcf-4085-83cc-bd2166fee458` (CL-0014)
+  - Brisas Golf: `2c66161e-5906-4d59-afb7-5b3f815665d9` (CL-0031)
+  - Llano Largo: `66b73c67-0ef4-4dd7-9303-994cb04b44ac` (CL-0029)
+  - Ojo de Agua: `3d1ac95d-fb0b-4aab-b9fb-f5d3f26c8ae8` (CL-0007)
+
+**⚠️ BP UUID drift pitfall (observed Jul 10 2026)**: stale/truncated UUIDs in memory caused `Business partner: business partner not found` (422) errors. Always pass the **full** UUID, not fragments. When you hit this 422, immediately re-fetch via `GET /api/business-partners/bp?perPage=100` and grep by name — don't retry the same UUID.
+
+**POTHOS → PHOTUS rename (Jul 10 2026)**: User confirmed POTHOS does not exist as a separate plant. Only PHOTOS MULTI RAMA and PHOTUS are valid. If POTHOS appears in sheet, rename to PHOTUS in all tabs.
+
+**API key rotation pitfall (observed Jul 10 2026)**: API keys may be silently rotated mid-session. Observed: `ten_PRQ2XeyfLOvi_8Vf1528LoJgV7IlTqTqcQi5LLO4owg` and `ten_6lRpIW7SBXsZOHylXp80MTf-qFAdW-DjKWJITOdF6bk` both expired during active use. When you suddenly get 401 mid-session, don't keep retrying — try an alternative key or ask the user for a fresh one. As of Jul 10 2026, only `ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE` (IK key) is confirmed working for items + POs + SOs.
+
+### Sales Documents — User Preference (vivero tenant, Jul 2026)
+
+The user manages **10+ customer branches** of SUPER EXTRA (same RUC 356-19-77860):
+1. **via israel** (CL-0035, id=32249c40-4c89-4fdf-a381-73969dba188d)
+2. **los pueblos** (CL-0005, id=a8cea960-d200-4222-8654-6cda0093d6b9)
+3. **albrook** (CL-0017, id=db64ad3e-a54c-4f15-b15b-d60dba3917a4)
+4. **monterico** (CL-0006, id=083fb553-ca57-4678-ba12-9ae1cf4b90ed)
+13. **Chanis** (CL-0040, id=d73abea9-fac1-43ac-9c1b-236c3c06b358)
+14. **4 Altos** (CL-0036, id=46765852-9ebe-48ba-8019-eac6b22281a3)
+7. **las tablas** (CL-0024, id=cbb72b57-a924-408d-9772-ca7de21834ae)
+8. **chorrera** (CL-0002, id=3d7f8040-61ea-45dd-b42d-97721513f018) — was renamed from generic "chorrera" to "SUPER EXTRA chorrera" Aug 2026, new UUID)\n9. **Marqueza** (CL-0030, id=36ebc81e-c06d-450a-88e9-ad722e3bcd73)\n10. **condado** (CL-0010, id=15ee6af1-c661-45a1-acd9-7e62a8cd3c3d)\n11. **aguadulce** (CL-0027, id=d9cd6c5e-9886-41df-a3a8-4d30ede82a7a)\n12. **penonome** (CL-0028, id=b3b486a9-bb07-4670-841c-fe4c95eead1a)\n13. **Chanis** (CL-0040, id=d73abea9-fac1-43ac-9c1b-236c3c06b358)\n14. **las acacias** (CL-0004, id=6bf480fd-4f62-41da-a4a6-353541fce16f)
+
+**Price list per client type:**
+- **SUPER EXTRA** (all branches): Use `SALE_EXTRA` (id=`13ce22b6-0b29-4029-be65-42e8c23cb239`) — SALE_SUPER and SALE_PUBLIC no longer exist as of Aug 2026.
+
+**Document type preference: SALES ORDERS (SO) over Sales Quotations (SQ)**
+- As of Jul 2 2026, user prefers **Sales Orders** (`POST /api/commerce/sales-orders`) for all Vivero Rose invoices. Sales Quotations were an earlier draft-only approach.
+- SO endpoint accepts identical payload structure to SQ, but produces `SO-` prefixed document numbers.
+- SQ drafts created earlier were deleted by the user — always use SO endpoint going forward.
+
+When creating orders from Vivero Rose invoices:
+- **ALWAYS show pre-creation summary** (cuántos items, total, fecha, cliente) and ask for confirmation before creating — user insists on this
+- **CRITICAL: Do NOT add extra items not in the invoice.** The user explicitly stopped work when extra sale items were attempted. Only include items exactly as listed on the invoice (or with N/C excluded). If an item fails validation (e.g., inactive), fix the item directly, don't skip silently and don't substitute with a different item without asking.
+- Items that are not plants (tierra negra, cascarilla de arroz, fletes, caja pote) are excluded unless user says otherwise
+- **Reference field** = `"Factura No.{number}"` (e.g., "Factura No.741")
+- **Date = expiration date** (validUntil = documentDate)
+- **Precio de factura** se pone manualmente (unitPrice), no se usa el precio del portal
+- Items que no existen en portal se reemplazan por el más cercano existente con `description` anotando el nombre original
+- Items with "N/C" (anotado en rojo en la factura) se excluyen de la orden — preguntar si no está claro
+### Iterative exclude pattern (user flow, observed Jul 10 2026)
+
+When presenting a pre-creation summary, the user often responds with **wave-after-wave exclusion commands** before final confirmation:
+- "Quita Fitonia"
+- "Molleja quita"
+- "Coleos también"
+- "Y quita toreina"
+- "Quita 2 unidades de ruda"
+- "Crea"
+
+**Workflow**: Each "quita X" or "quita N unidades de Y" adjusts the draft. After each adjustment, present a refreshed compact table and ask "¿Confirmas y creo?" — don't create until final "crea" / "sí" arrives. Apply subtraction correctly (e.g., "quita 2 unidades de RUDA" means qty-2, not remove the line).
+
+**Mark N/C items explicitly**: When user says "Mc" or "MC" or "N/C" or "U/C" or shows a manually-crossed-out line in the receipt, treat as Nota de Crédito and exclude. (User clarified Jul 10 2026: "Mc significa nc nota de crédito esas no vienen quita lengua enana".)
+
+**Mark blue-highlighted items**: A blue highlighter mark across an item line (without "x" or "N/C") means exclude per "Ignora la raya azul no lo pongas" (Jul 10 2026 user instruction).
+
+**Do NOT batch-create**: After final confirmation only, create as one POST. Don't create in advance of final confirmation.
+
+**"Trata otra vez" pattern**: When the user says "trata otra vez", they want you to try the API call again. Common after a 422 (BP not found) or 401 (key expired). Always re-fetch the BP ID or confirm the key is valid before retrying.
+
+**Batch processing many invoices**: When the user sends 10+ invoices in a single session, process them sequentially. After each SO is created, ask "¿Más o cerramos?" to pace the work. The user may say "una más" and send the next image.
+
+### Item IDs — verified Jul 10 2026 (use canonical UUIDs in SO payloads)
+
+| Code | ID |
+|---|---|
+| PL-HIERBA-BUENA | 062d1a46-052c-4708-9133-07fe2a81233e |
+| PL-ROMERO | d59e6582-fa97-4099-8280-3eccafcd3ddd |
+| PL-OREGANO | aeda4fc5-df1e-4432-8976-1e8da809f2ba |
+| PL-MENTA | 76b5e418-8ec2-49c7-bb50-52e730727ad2 |
+| PL-RUDA | efb60297-1af2-4ac2-a8bb-4e761f6dd55b |
+| PL-CHAVELITAS | 9ab5e555-e162-45f3-b75c-4c224f932453 |
+| PL-MINI-JADE | b4185f6c-a43b-4355-b0c4-1602ae6f5ac5 |
+| PL-JADE | 9e1406a5-3af0-4d3b-8672-d2bd0be7ae46 |
+| PL-CACTUS-PEQUENO | 74716449-04a8-464f-8934-d0cfc2a2223c |
+| PL-CACTUS-MEDIANO | 975472e4-d282-4549-b09c-f0a2a4f46f62 |
+| PL-CORONITA | 1d1f0847-fc61-47c4-aacc-c6696e0f7f16 |
+| PL-AJI-BOLITA | 6ffd5e01-5391-464b-8438-b3701e818f09 |
+| PL-COLEOS | c01697f6-d66b-435d-8a91-61361e082d32 |
+| PL-MILLONARIA-ZAMIOCULCA-NEGRA | a102fd1c-8b35-490f-b990-e7c12dd1dcc8 |
+| PL-PETUNIN | 1627b04e-31b3-4387-82db-1a959db1a833 |
+| PL-NOVIO-CHINO | 2c95dd1b-de38-45da-9736-4b1cd186cbab |
+| PL-CRISANTEMOS | c1c24587-5a8f-41b8-ad54-21d7f7ca28c8 |
+| PL-CLAVELITO | a8f5eac3-96f1-48ec-8fe1-c1068f438a78 |
+| PL-ROSA | 29dd94b2-0520-49cc-bd45-13bf1c6a3486 |
+| PL-TORENIA | 1ff7df32-c398-4ae3-88eb-97349e171ffa |
+| PL-CELOCIA | 4c2c61a8-4bb0-4f02-89f1-7676c891a209 |
+| PL-CINTA-MALA-MADRE | b482c000-7e78-4020-811c-5980a5e5690b |
+| PL-MOLLEJA | af8aca4f-22e8-4b60-a7f8-960da2bc660a |
+| PL-LENGUA-DE-SUEGRA-MINI | cdd96323-ceb2-4a42-94e9-2f609aeb6ae8 |
+| PL-LENGUA-DE-SUEGRA-ENANA | 0e44bb3f-59db-4ba0-b4e2-93ca75eb9504 |
+| PL-SABILA-ALOE-PEQUENA | 09bf99ba-66ee-40fa-aa67-d24177339b7f |
+| PL-SABILA-ALOE-MEDIANA | 3e7971a1-8582-44a4c-bb3f-1543fa48672a |
+| PL-FITONIA-ROJA | 2f7c98b0-b46b-41a9-b7c8-13ddcadd83cb |
+| PL-HELECHOS | aa9c8ee2-dce8-4716-9f53-345b7a6acf3f |
+| PL-MILLONARIA-ZAMIOCULCA | 82a2c433-a183-4f69-8fdc-166eccf92c0f |
+| PL-ALBAHACA-VERDE | 2e17e585-268a-4f80-9917-f5c8ce66ce32 |
+| PL-AGLONEMAS | 49cc7172-ddf4-455f-9e4e-7d61c31aadc2 |
+| PL-SUCULENTA-PEQUENA | aefb5911-d10c-491a-855c-f3b7b9b89b3a |
+| PL-SUCULENTAS-MEDIANAS | 8648c4e1-a578-4766-9eb3-0fce17b755a1 |
+| PL-SUCULENTAS-GRANDE | eca57e54-59f0-4767-99c0-2ea0a5a8974e |
+| PL-PALO-DE-BRASIL | 49d81105-de51-4519-849f-f0e86cafa0e9 |
+| PL-EPISCIAS-VR | 28ac04cf-4f57-400e-9809-f8d393a64170 |
+| PL-MARIGOLD-VR | 308d74a0-b83a-4031-ba58-a22e09a2f129 |
+
+> **⚠️ AGLONEMAS ID pitfall**: a stale UUID (`12a07b4d-97c5-4a11-9af4-2ded2165ffc8`) was cached in memory; it returned `Item: item not found` (422). Always use the by-code endpoint to verify IDs at session start.
+- **DO NOT auto-exclude items from past sessions** — each invoice is processed independently. Just because an item was excluded in a previous order (e.g., MARIGOLD was excluded in Jun 2026) does not mean it should be excluded now. The user will ask '¿por qué sin X?' if you remove something they didn't say to remove. Only exclude if the current invoice explicitly marks N/C or the user says to exclude now.
+- **If a line fails with `"item is not active"`**: reactivate the item via PATCH `{isActive: True, version}`, then retry the full payload. Do NOT skip the line without asking.
+
+### Item Name Corrections & Sheet Matching (vivero tenant, Jul 2 2026)
+
+**From Vivero Rose invoices → Sheet INVENTARIO names:**
+
+| Invoice name | Sheet name |
+|---|---|
+| HIERBA BUENA | HIERBA BUENA |
+| MENTA | MENTA |
+| ROMERO | ROMERO |
+| ALBAHACA | ALBAHACA VERDE |
+| ORÉGANO | OREGANO |
+| TOMILLO | TOMILLO |
+| RUDA | RUDA |
+| CHAVELITAS | CHAVELITAS |
+| CINTAS / CINTA MALA MADRE | CINTA MALA MADRE |
+| CACTUS (variados) | CACTUS MEDIANO |\n| CACTUS VARIADOS PEQUEÑO VR | CACTUS PEQUEÑO (PL-CACTUS-PEQUENO) — buscar PL-CACTUS-PEQUENO |
+| CORONITAS | CORONITA |
+| CLAVELES / CLAVELITO | CLAVELITO |
+| TORENIAS | TORENIA |
+| JADE | JADE |
+| MINI JADE | MINI JADE |
+| CRISANTEMOS | CRISANTEMOS |
+| AJÍ BOLITA | AJI BOLITA |
+| NOVIOS / NOVIAS | NOVIO CHINO |
+| LENGUA MINI | LENGUA DE SUEGRA MINI |
+| LENGUA ENANA | LENGUA DE SUEGRA ENANA |
+| PETUNIN | PETUNIN |
+| CELOCIA | CELOCIA |
+| ROSA | ROSA |
+| PALMA ROJA | PALMA ROJA |
+| ROSITA MINIATURA | ROSITA MINIATURA |
+| SUCULENTAS VARIADAS PEQUEÑA | SUCULENTA PEQUEÑA |
+| SUCULENTAS VARIADAS MEDIANA | SUCULENTAS MEDIANAS |
+| SUCULENTAS VARIADAS GRANDE | SUCULENTAS GRANDE |
+| IXORA | IXORA |
+| FITONIA ROJA | FITONIA ROJA |
+| SÁBILA ALOE PEQUEÑA | SABILA ALOE PEQUENA |
+| MOLLEJA / MOLLEJITAS | MOLLEJA |
+| APIO | APIO |
+| CIELITO AZUL | CIELITO AZUL |
+| ZAMIOCULCA | MILLONARIA ZAMIOCULCA |
+| ZAMIOCULCA NEGRA | MILLONARIA ZAMIOCULCA NEGRA |
+| CAÑA DEL BRASIL | PALO DE BRASIL |
+| ALOCASIA LAVA | ALOCASIA LAVA ROJA |
+| FICUS TRIANGULAR | FICUS TRIANGULAR GRANDE |
+| HELECHO | HELECHOS |
+| PALO DE BRASIL DE ESCRITORIO | PALO DE BRASIL DE ESCRITORIO |
+| CACTUS HUESO DE DRAGÓN | CACTUS HUESO DE DRAGON |
+| CELOSIA | CELOCIA |
+| BOMBERO | = ROMERO (sumar cantidades) |
+| CHOCOLATE | = CHAVELITAS (sumar cantidades) |
+| MINI UVAS | Excluir / no existe en portal |
+| MARIGOLD VR | PL-MARIGOLD-VR (crear item nuevo si no existe)
+| PHOTUS VR | PHOTUS (PL-PHOTUS)
+| TRADESCANTA ZEBRINA CUCAR / TRADESCANTIA ZEBRINA CUCARACHA | TRADESCANTIA ZEBRINA CUCARACHA (PL-TRADESCANTIA-ZEBRINA-CUCARACHA)\n| EPISCIAS VR | EPISCIAS VR (PL-EPISCIAS-VR) — itemCode: PL-EPISCIAS-VR, id: 28ac04cf-4f57-400e-9809-f8d393a64170\n| SABILA ALOE MEDIANA VR | SABILA ALOE MEDIANA (PL-SABILA-ALOE-MEDIANA) — id: 3e7971a1-8582-4a4c-bb3f-1543fa48672a\n| CELOZIA VR | CELOCIA (PL-CELOCIA)\n| AGLONEMAS VR | AGLONEMAS (PL-AGLONEMAS)\n| COLEOS VR / COLES VR CORATIVO VR | COLEOS (PL-COLEOS)\n| GRONFENA VR | GRONFENA (PL-GRONFENA) — sí existe, buscar código PL-GRONFENA (sin VR)\n| CACTUS VARIADOS PEQUEÑO VR | CACTUS PEQUEÑO (PL-CACTUS-PEQUENO)\n| MILLONARIA MEGRA VR / MILLONARIA NEGRA VR | MILLONARIA ZAMIOCULCA NEGRA (PL-MILLONARIA-ZAMIOCULCA-NEGRA)\n| MILLONARIA SAMAQUILA VR / MILLONARIA SAMIAOCULA VR | MILLONARIA ZAMIOCULCA (PL-MILLONARIA-ZAMIOCULCA)\n| AJI BOLITA AMAOCUILA VR / AJI BOLITA DECORATIVO VR | AJI BOLITA (PL-AJI-BOLITA)\n| PALO DE BRAZIL MEDIANO VR | PALO DE BRASIL (PL-PALO-DE-BRASIL)\n| PALMA ABANICO VR | PALMA ABANICO (PL-PALMA-ABANICO)\n| CRISANTEMOS EN POTE VR | CRISANTEMOS (PL-CRISANTEMOS)\n\n### VR Item Code Pattern\nItems from Vivero Rose with "VR" suffix in their invoice name often have item codes WITHOUT the `-VR` suffix in the portal:\n- HIERBA BUENA VR → code: `PL-HIERBA-BUENA` (NOT PL-HIERBA-BUENA-VR)\n- RUDA VR → code: `PL-RUDA`\n- ROMERO VR → code: `PL-ROMERO`\n- OREGANO VR → code: `PL-OREGANO`\n- CHAVELITAS VR → code: `PL-CHAVELITAS`\n- MENTA VR → code: `PL-MENTA`\nAlways search by both with and without VR suffix when using by-code endpoint.\n\n### Super Xtra Branch Codes (complete list)\nBranches of SUPER EXTRA / Super Xtra (same RUC 356-19-77860):\n- via israel: CL-0035 (32249c40...)\n- los pueblos: CL-0005 (a8cea960...)\n- albrook: CL-0017 (db64ad3e...)\n- monterico: CL-0006 (083fb553...)\n- el Lago: CL-0019 (78532e5e...)\n- las acacias: CL-0004 (6bf480fd...)\n- las tablas: CL-0024 (cbb72b57...)\n- chorrera: CL-0002 (3d7f8040...)\n- marqueza: CL-0030 (36ebc81e...)\n- condado: CL-0010 (15ee6af1...)\n- aguadulce: CL-0027 (d9cd6c5e...)\n- penonome: CL-0028 (b3b486a9...)\n- **4 Altos**: CL-0036 (46765852-9ebe-48ba-8019-eac6b22281a3)\n- **Chanis**: CL-0040 (d73abea9-fac1-43ac-9c1b-236c3c06b358)\n\nBranches (full UUIDs verified Aug 2026):\n- Santiago Terminal: 62755ad8-2b10-4bd7-8974-0f635a2a04ef (CL-0021)
+- La Siestas: 6edfbbad-3419-43bd-9128-68363f6f6d69 (CL-0202)
+- San Isidro: 04866578-7b69-4052-80e0-85e69eba4c90 (CL-0034)
+- Villa Lucre: 8ca7ecc1-dfcf-4085-83cc-bd2166fee458 (CL-0014)\n- Brisas Golf: 2c66161e-5906-4d59-afb7-5b3f815665d9 (CL-0031)\n- Chitré: 796f2a9e-4ef6-4720-a61b-d965fc75a95c (CL-0011)\n- Sabanitas: e1df2e36-4388-4630-86b5-d73c0e668f99 (CL-0012)\n- XM Capira: f8febfe4-e89c-4892-beee-eb771ac02a5e (CL-0039)\n- San Isidro: 04866578-7b69-4052-80e0-85e69eba4c90 (CL-0034)\n- Santiago Terminal: 62755ad8-2b10-4bd7-8974-0f635a2a04ef (CL-0021)\n- La Siestas: 6edfbbad-3419-43bd-9128-68363f6f6d69 (CL-0202)\n\n> **Note**: The old `bpCode: null` issue (where BPs created via portal UI had `bpCode: null` and SO creation required passing an arbitrary string) appears resolved as of Aug 2026. All SUPER EXTRA branches now have valid bpCodes (CL-XXXX). If you encounter `\"BPCode\" failed on the 'required' tag`, pass the branch name as a string.\n\n### When Invoice is Lost — Goods Receipt as Proxy\n\nThe client's RECIBOLM system (Super Xtra) produces "Entrada de Mercancía" documents when they receive a delivery. If the original Vivero Rose invoice (Factura) is lost, this goods receipt is sufficient proof to create the sales order:\n- **Document type**: "Entrada de Mercancía" — shows supplier (VIVERO ROSE), center/location (branch), supplier invoice number (Nro. Factura Prov.), and the itemized list with quantities and unit costs.\n- **Use the supplier invoice number** (Nro. Factura Prov.) as the reference when creating the SO.\n- **Item count, quantities, and unit prices** are listed in the receipt table — use them exactly.\n- **Branch name** in the receipt (Centro field like "T030 Las Marqueza") maps to the SUPER EXTRA BP in the portal (e.g., "Super Extra Marqueza" CL-0030).\n- The "IMPORTE TOTAL" on the receipt may differ from what was in the original Factura, but use the receipt values since that's what was actually delivered and received.
+- **"Comenzamos de nuevo" pattern**: When the user says "comenzamos de nuevo una por una", they want to restart processing — delete any previously created SO for that invoice and process the goods receipt version instead. The goods receipt (Entrada de Mercancía) is usually more accurate since it reflects what was actually received.
+
+### Bulk Import Name Overrides (Jul 6 2026)
+When importing INVENTARIO sheet items to portal via bulk create, the user applies these overrides:
+- **FICUS LYRATA (HASTA 200CM)** → rename to **FICUS LYRATA GRANDE** (code: PL-FICUS-LYRATA-GRANDE). Name strips the parenthetical, replaces with GRANDE.
+- **FICUS LYRATA 3 RAMAS (HASTA 175CM)** → keep as **FICUS LYRATA 3 RAMAS (HASTA 175CM)** (code: PL-FICUS-LYRATA-3-RAMAS). Name includes parenthetical.
+- **MONSTERA ADANSONII** → include exactly **1** (not 0, not 2). Sheet has 2 identical rows (106, 107) — deduplicate to one.
+- **CAJA POTE 120_1000PCS, CAJA POTE 180_450PCS** → create as full items (stock type, isSellable=true) with code WITHOUT PL- prefix. Code = CAJA-POTE-1201000PCS / CAJA-POTE-180450PCS.
+
+### Items to Ask Before Creating
+- BOMBERO, CHOCOLATE, MINI UVAS — unknown plant names, ask user what they refer to
+- FLETES, CAJA POTE — non-plant items; create with code WITHOUT PL- prefix when user explicitly requests it
+- TIERRA NEGRA, ABONO ORGANICO, CASCARILLA DE ARROZ — INCLUDE automatically when they appear on Vivero Rose invoices, DO NOT exclude by default. These are sellable items with their own item codes (TIERRA-NEGRA, ABONO-ORGANICO, CASCARILLA-DE-ARROZ) and prices. The user sends invoices with only these items (tierras-only invoices) and expects them processed like any other. Use codes WITHOUT PL- prefix. Tierras/abonos have zero cost in COST_SARACELY (per user: "las tierras no tienen costo").
+
+## Source of Truth Preference
+
+As of Jul 2 2026, the user prefers comparing against the **Google Sheet INVENTARIO tab** as the source of truth for item names and existence, NOT the EZY Portal API. He plans to migrate the portal within a week. When matching:
+1. Read INVENTARIO!A:A from the sheet
+2. Normalize: NFKD + ASCII + UPPERCASE + strip non-alphanumeric
+3. Match against user's list
+4. For items not found, try partial word matching
+5. Present both the exact matches and ambiguities to the user for resolution
+
+**Updated Aug 1 2026**: User explicitly asked to compare against **Airtable** (sortable via `vivero.ezyts.com`) instead of the old INVENTARIO sheet, since the sheet will be migrated. The `alohomora` backup in Airtable (`appIQ4f4j6c2bMPlb`) is now the preferred source of truth for stock reconciliation.
+
+### Invoice Processing (Factura) Workflow — protego
+Each invoice from a supplier is processed independently. See `references/factura-reading-workflow.md` for the complete workflow. Key constraints:
+- **Do NOT mix invoices** — each invoice is its own order. User said "no mezcles" and "solo esta imagen no mezcles".
+- **Do NOT sum stock** — report invoice items as they appear
+- **Show summary before creating** — user must confirm before order creation
+- **Only process what was asked** — respect "no mezcles" and "solo esta imagen"
+- **Sales order status: DRAFT** — user prefers draft orders, not confirmed
+- **Compact terminal output**: User says "usa compact en tus commandos" — use concise `curl -s` (no verbose `-v` flags), pipe through `python3 -c` for minimal extracted output, avoid raw json dumps. Output compact tables, not verbose prose. Store large JSON payloads as files (`/tmp/so_<branch>.json`) and reference with `-d @file`.
+- **Confirmation keyword**: User responds "dle" or "dle+" to confirm — do not ask "¿Estás seguro?" or wait for full sentences. Just "¿Creo la orden?" and they'll reply "dle".
+- **Invoice date extraction**: Always read the date from the invoice image. Use ISO 8601 format with T for the API (`"2026-06-05T00:00:00Z"`).
+- **One at a time per multi-invoice batch**: When the user sends 3+ invoices at once, process them "una por una" — present each one individually, get confirmation, create it, then move to the next. Do NOT batch-create all at once.
+- **Goods Receipt as invoice proxy**: If the user says "la factura se perdió pero esto es lo que le vendí" and shows an "Entrada de Mercancía" (RECIBOLM system), treat it as the source document. Use the supplier invoice number (Nro. Factura Prov.) as the SO reference.
+- **Receipt image rotation**: When RECIBOLM receipts are photographed rotated/landscape, use PIL to rotate the image (img.rotate(90, expand=True)), save to /tmp/, then use vision_analyze on the rotated copy to get corrected quantities and prices. This is more reliable than the initial OCR from the image description alone.
+
+When items needed for a quotation are inactive (`isActive=false`):
+1. Fetch ALL items (paginated, active + inactive)
+2. Filter inactive: `[i for i in all_items if not i.get("isActive", True)]`
+3. PATCH each with `{"isActive": True, "version": version}`
+4. On 409 Conflict, retry with `version + 1`
+
+On Jul 1 2026: 57 items reactivated, 0 failures.
+
+**CRITICAL**: Item UUIDs can CHANGE between sessions (re-fetch needed).
+**CRITICAL**: `POST /api/items/items/{id}/restore` may return 200 but NOT actually activate the item. Use PATCH instead.
+
+## Spells (Harry Potter CLI convention)
+
+### lumos — Portal → Google Sheet (VERIFIED OK)\nSync portal stock + SALE_SUPER prices → INVENTARIO tab.\n- Script: `scripts/lumos.py`\n- Run: `~/.hermes/hermes-agent/venv/bin/python3 skills/software-development/ezy-portal-api/scripts/lumos.py`\n- Normalizes names (strip accents, VR suffix, parentheticals) for matching\n- Compacts empty rows automatically\n- Updates ALL rows unconditionally (not just empty ones)\n\n**AFTER lumos runs, ALWAYS check for gaps** (items in portal not in sheet):\n  `~/.hermes/hermes-agent/venv/bin/python3 skills/software-development/ezy-portal-api/scripts/check_sheet_gaps.py`
+
+**Tierras ordering (Jul 2026)**: Items from the TIERRAS group (TIERRA-NEGRA, ABONO-ORGANICO, CASCARILLA-DE-ARROZ) must be moved to the **END** of the INVENTARIO sheet after lumos sync. The user explicitly requires this — "pon las tierras de ultimo". After writing stock/price updates, reorder the sheet rows so tierras items are the last active rows.\n  - Script: `scripts/check_sheet_gaps.py`\n  - Prints count + list of missing items\n  - Use the output to decide whether to add missing rows to the sheet\n  - On Jul 2 2026: 224 portal items vs 210 in sheet = 38 missing
+
+### alohomora — Portal → Airtable (PARTIAL)
+Backup items + BPs to Airtable base `appIQ4f4j6c2bMPlb`.
+- Script: `scripts/alohomora.py`
+- Tables: tblTXfSmRyVPV6Tv1 (Items), tblXKTjY4kjgnPdTb (BPs)
+
+#### Credential verification (run before backup if failures expected)
+```bash
+# Portal key check
+curl -s -H "X-Api-Key: $PORTAL_KEY" -H "User-Agent: Mozilla/5.0" \
+  "https://vivero.ezyts.com/api/items/items?perPage=1&isActive=true" | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); print(f'OK: {d.get(\"total\",\"?\")} items' if 'data' in d else d)"
+
+# Airtable key check (AIRTABLE_KEY is hardcoded in script line 16)
+curl -s -H "Authorization: Bearer patozWFMZn8GCrcQZ.8a5a54ace302fe272c9905e94c93889ba864a514a562d5613f15a799d78c815bb" \
+  "https://api.airtable.com/v0/appIQ4f4j6c2bMPlb/tblTXfSmRyVPV6Tv1?maxRecords=1" | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); print('Airtable OK' if 'records' in d else d.get('error',d))"
+```
+
+### stupefy — Sheet → Portal (ad-hoc)
+Bulk create/update items from Google Sheet rows.
+- Workflow: `references/spell-commands.md` and `references/bulk-creation-workflow.md`
+
+### avada kedavra — Full sheet update (3 tabs)
+Update all 3 tabs of the Google Sheet: INVENTARIO, REPORTS, SOLD_AMOUNT.
+- **Script**: `scripts/avada.py` — run with `~/.hermes/hermes-agent/venv/bin/python3 skills/software-development/ezy-portal-api/scripts/avada.py`
+- Fetches portal items (stock via IK key), POs (costs), SOs (sales) via API, then writes all 3 tabs
+- **⚠️ Sheet write bug**: Using `svc.spreadsheets().values().update()` with a `A1:IX00` range that's SMALLER than the existing data leaves orphan rows below. On the next read, they create phantom duplicates. Fix: use the **clear+write pattern**: clear the range, write, then clear rows below (see pattern above). Update the avada.py script to use this pattern if you see recurring duplicates.
+- **Before running**: always review COST_SARACELY column for errors. The user may say "no metas los costos todavía" — respect this and only update if asked.
+- **Key used**: `ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE` — confirmed working for items+POs+SOs
+- **API key rotation**: Keys can expire mid-session. If avada fails with 401, check key and ask user.
+
+**REPORTS tab** (A=PLANTA, B=COSTO, C=SALE, D=MARGIN %):
+- COSTO: For each item, collect all `unitPrice` values from purchase order lines across ALL suppliers. If only 1 price → `$X.XX`. If multiple → `$min-$max` (range).
+- SALE: Use the MOST RECENT `unitPrice` from a CLOSED/INVOICED sales order line for that item. Only 1 price (no range for sale). Extracted from SO line items (not from items endpoint which returns empty prices).
+- MARGIN %: `((sale - cost) / sale) * 100`. Range if cost is range: `((sale - maxCost) / sale)% - ((sale - minCost) / sale)%`.
+
+**SOLD_AMOUNT tab** (A=PLANTA, B=AMOUNT_SOLD, C=TOTAL_COST, D=TOTAL_SALE, E=TOTAL):
+- ⚠️ Tab name has a trailing space: `'SOLD_AMOUNT '` (use quotes in API calls).
+- AMOUNT_SOLD: Sum of all `quantity` across ALL sales order lines for that item.
+- TOTAL_COST: Sum of (`quantity` × `unitPrice` from PO) for each line. If no PO cost, leave blank.
+- TOTAL_SALE: Sum of (`quantity` × `unitPrice` from SO) for each line.
+- TOTAL: TOTAL_SALE − TOTAL_COST.
+- Last row (TOTAL in column A): sum of all above rows for each column.
+- Fetch all SOs (any status), fetch each SO individually with `expand=lines` to get line items.
+- Fetch all POs, fetch each individually with `expand=lines` to get unit costs per item.
+- Match items by **normalized name** (NFKD + uppercase + strip accents), not by itemCode.
+### Cost ingestion from supplier price lists (e.g., COST_SARACELY)
+
+When the user provides a physical price list (photo/scan):
+1. Extract items via vision_analyze → get name + price pairs
+2. Strip container/size/PROMOCION details: `extract_base()` — remove "EN POTE...", "PROMOCION...", pot sizes, measurements
+3. Match base names to portal items using NFKD normalization
+4. **Avoid false substring matches**: e.g., "BAMBU" should NOT match "BAMBU ENTRENZAS", "ROSA" should NOT match "CALATHEA MAGESTICA ROSADA". Use exact NFKD match or word-boundary partial match, not substring contains.
+5. Write to the correct COST_ column in INVENTARIO (D-I)
+
+### Cost range display ($min-$max) for multi-price suppliers
+
+When filling supplier cost columns (D-I) from purchase order data, **the same supplier may have purchased the same item at different prices across different POs**.
+- If only 1 unique price → `$X.XX`
+- If multiple prices → `$min-$max` (e.g., `$0.95-$1.00` for JADE in COST_MIJARDIN)
+- Example range items (verified Jul 10 2026): JADE ($0.95/$1.00), HIERBA BUENA ($0.75/$0.80), MINI JADE ($0.85/$1.00), TORENIA ($0.80/$1.00), CORONITA ($1.00/$1.25), MENTA ($0.80/$0.85)
+
+**Performance: cache PO data locally** — fetching each PO detail (~14 POs × 1-20s each) is the bottleneck:
+```bash
+mkdir -p /tmp/po_data
+curl -s -H "X-Api-Key: $KEY" "$BASE/api/commerce/purchase-orders?perPage=50" > /tmp/po_data/list.json
+# Then fetch each PO individually
+for p in $(python3 -c "import json; [print(d['id']) for d in json.load(open('/tmp/po_data/list.json')).get('data',[])]" 2>/dev/null); do
+  curl -s -H "X-Api-Key: $KEY" "$BASE/api/commerce/purchase-orders/$p?expand=lines" > /tmp/po_data/po_${p:0:8}.json
+done
+# Process from cached files
+python3 -c "import json, glob; ..."
+```
+
+**SALE price extraction from SOs** (for column B of INVENTARIO):
+- Cannot use `GET /api/items/items?expand=prices` — API keys don't have price visibility.
+- Instead: iterate ALL sales orders, fetch each one individually with `expand=lines`, extract `unitPrice` per item.
+- Take the MOST RECENT price (by `documentDate`) per item.
+- Match by normalized name (NFKD), then by itemCode as fallback.
+### Cost ingestion from supplier price lists (e.g., COST_SARACELY)
+
+When the user provides a physical price list (photo/scan):
+1. Extract items via vision_analyze → get name + price pairs
+2. Strip container/size/PROMOCION details: `extract_base()` — remove "EN POTE...", "PROMOCION...", pot sizes, measurements
+3. Match base names to portal items using NFKD normalization
+4. **Avoid false substring matches**: e.g., "BAMBU" should NOT match "BAMBU ENTRENZAS", "ROSA" should NOT match "CALATHEA MAGESTICA ROSADA". Use exact NFKD match or word-boundary partial match, not substring contains.
+5. Write to the correct COST_ column in INVENTARIO (D-I)
+
+### Cost range display ($min-$max) for multi-price suppliers
+
+When filling supplier cost columns (D-I) from purchase order data, **the same supplier may have purchased the same item at different prices across different POs**.
+- If only 1 unique price → `$X.XX`
+- If multiple prices → `$min-$max` (e.g., `$0.95-$1.00` for JADE in COST_MIJARDIN)
+- Example range items (verified Jul 10 2026): JADE ($0.95/$1.00), HIERBA BUENA ($0.75/$0.80), MINI JADE ($0.85/$1.00), TORENIA ($0.80/$1.00), CORONITA ($1.00/$1.25), MENTA ($0.80/$0.85)
+
+**Performance: cache PO data locally** — fetching each PO detail (~14 POs × 1-20s each) is the bottleneck:
+```bash
+mkdir -p /tmp/po_data
+curl -s -H "X-Api-Key: $KEY" "$BASE/api/commerce/purchase-orders?perPage=50" > /tmp/po_data/list.json
+# Then fetch each PO individually
+for p in $(python3 -c "import json; [print(d['id']) for d in json.load(open('/tmp/po_data/list.json')).get('data',[])]" 2>/dev/null); do
+  curl -s -H "X-Api-Key: $KEY" "$BASE/api/commerce/purchase-orders/$p?expand=lines" > /tmp/po_data/po_${p:0:8}.json
+done
+# Process from cached files
+python3 -c "import json, glob; ..."
+```
+
+**SALE price extraction from SOs** (for column B of INVENTARIO):
+- Cannot use `GET /api/items/items?expand=prices` — API keys don't have price visibility.
+- Instead: iterate ALL sales orders, fetch each one individually with `expand=lines`, extract `unitPrice` per item.
+- Take the MOST RECENT price (by `documentDate`) per item.
+- Match by normalized name (NFKD), then by itemCode as fallback.
+
+## Creating Items via POST — Critical Workflow
+
+### Pre-creation: Check for duplicates
+1. Fetch ALL active portal items (paginate 100/page)
+2. Build `portal_by_name[name.upper().strip()]` and `portal_by_norm[normalize(name)]`
+3. For each source row, check exact name match first, then normalized
+4. Also check by itemCode if provided
+
+**⚠️ Fresh portal (no existing items):** Skip the dedup phase entirely. `GET /api/items/items` returns `total: 0`. Go straight to creating.
+
+### POST payload
+```python
+{
+    "itemCode": "PL-NEW-ITEM",
+    "name": "NEW ITEM NAME",
+    "description": "New Item.",
+    "itemType": "stock",
+    "isStock": True,
+    "isPurchasable": True,
+    "isSellable": True,
+    "baseUom": "EA",
+    # OMIT initialUOMs — causes chk_uom_code SQL error
+    "itemGroupId": GROUP_ID,       # fetch fresh! OPTIONAL — omit if no groups exist yet
+    "itemClassId": CLASS_ID,       # fetch fresh! OPTIONAL — omit if no classes exist yet
+    "defaultSalesTaxCategoryId": TAX_ID,
+    "defaultPurchaseTaxCategoryId": TAX_ID,
+    "prices": [{
+        "priceListId": PL_ID,
+        "priceListCode": "COST_HACIENDA",
+        "price": 20.00,
+        "currencyCode": "USD"
+    }]
+}
+```
+
+### Minimal Payload (MARIGOLD pattern, Aug 2026)
+To create a simple sellable item with NO groups, classes, or prices (add those later):
+```python
+{
+    "itemCode": "PL-MARIGOLD-VR",
+    "name": "MARIGOLD VR",
+    "description": "MARIGOLD VR",
+    "itemType": "stock",
+    "isStock": True,
+    "isPurchasable": True,
+    "isSellable": True,
+    "isActive": True,
+    "baseUom": "EA",
+    "defaultSalesTaxCategoryId": "097722df-e70c-4380-9372-a863c67c2bca",
+    "defaultPurchaseTaxCategoryId": "097722df-e70c-4380-9372-a863c67c2bca"
+}
+```
+This creates an item with `isActive: true` (no need for post-patch), `defaultSalesTaxCategory: EXCENTO`, and `version: 1`. Item is immediately usable in sales orders. Tested with `ten_Zk271...` API key via urllib (no CA cert issues).
+
+### Pitfalls
+1. **"Item class not found"** → itemGroupId or itemClassId UUIDs are wrong. Fetch fresh from /api/items/item-groups and /api/items/item-classes.
+2. **POST response omits itemCode** → use id from response for tracking, not the code field.
+3. **Unparseable prices** → sheet values like "10/20/30" (range notation) break float(). Catch ValueError and default to 0.
+4. **DUPLICATE item code** → check existing items by code AND name before creating.
+5. **Price masking on success** → prices: [] in PATCH response doesn't mean write failed. Check version increment (1→2 = success).
+6. **Barcodes need UOMs first** — POST creates items WITHOUT itemUoms. The /api/items/items/{id}/barcodes endpoint requires an itemUomId. Until UOMs are added via PATCH, barcodes cannot be generated.
+7. **Category assignment via PATCH works with API key** — even though GET /api/categories requires Bearer JWT, setting itemCategory + tags on PATCH /api/items/items/{id} works with X-Api-Key. See references/vivero-category-mapping.md for category UUIDs.
+8. **itemType enum: "nonstock" is INVALID** — The itemType field on POST accepts only specific enum values (e.g. "stock", "service"). "nonstock" returns 400 'Field validation for ItemType failed on the oneof tag'. Always use "stock" for physical items (plants, cajas, supplies). If unsure, omit it — the server defaults to "stock".
+
+### Stupefy Dedup-Sheet Gap (CRITICAL)
+When bulk-creating items from a Google Sheet to the portal via stupefy workflow:
+
+1. **Dedup phase** checks portal for existing items → produces `skip_list` (already in portal) and `create_list` (new).
+2. **Create phase** sends only `create_list` to the portal API.
+3. **Sheet phase** MUST append BOTH `create_list` AND `skip_list` to the target sheet tab.
+
+**The bug**: Only appending `create_list` causes 30-50% of expected plants to vanish from the sheet. The user will notice and call this out.
+
+**The fix**: Always union both lists before writing to the sheet:
+```python
+all_to_add = [n for _, n, _, _ in create_list] + [n for _, n, _, _ in skip_list]
+# Sort, then write to sheet
+```
+
+### Post-Creation Fix: isActive + itemGroup (CRITICAL)
+Items created via `POST /api/items/items` have `isActive: false` and `itemGroup: null` by default. They WILL NOT appear in the portal's item list view — only in search.
+
+**After bulk creation, ALWAYS patch all new items:**
+```python
+patch = {"version": version, "isActive": True, "itemGroup": GROUP_ID}
+# PATCH /api/items/items/{id} with this payload
+```
+Without this step, the user will report "no encuentro las bandejas" / "solo en buscar todo".
+
+**⚠️ Fresh portal — no groups/classes exist yet:**
+On a brand-new tenant (no item groups, no item classes), the POST endpoint accepts items without `itemGroupId` and `itemClassId`. The PATCH to set isActive should also omit `itemGroup` if the groups endpoint returns empty:
+```python
+groups = curl_get("/api/items/item-groups?perPage=50")
+if groups["data"]:
+    patch["itemGroup"] = groups["data"][0]["id"]   # use first group
+else:
+    patch = {"version": version, "isActive": True}  # no group to assign
+```
+Fetch groups/classes fresh at the start of every session — IDs drift between sessions.
+
+### Price Lists Endpoint is Paginated
+Since Jun 30 2026, `GET /api/pricing-tax/price-lists` returns a **paginated response** `{data: [...], hasMore, total}` — NOT a flat array. Always use `perPage=50` and iterate:
+```python
+result = curl_get("/api/pricing-tax/price-lists?perPage=50")
+for pl in result["data"]:
+    price_lists[pl["code"]] = pl["id"]
+```
+
+### urllib 401 with Some API Keys
+Older keys (`ten_3HW_...`) get **HTTP 401** from Python urllib on ALL portal endpoints even with Mozilla UA + SSL workaround. Newer keys (`ten_Zk271...`) work fine with urllib. When urllib gives 401, use `curl` via subprocess instead:
+```python
+import subprocess, json
+result = subprocess.run(["curl", "-s", "-H", f"X-Api-Key: {API_KEY}", "-H", "User-Agent: Mozilla/5.0",
+    "https://vivero.ezyts.com/api/items/items?perPage=100&page=1"],
+    capture_output=True, text=True, timeout=30)
+data = json.loads(result.stdout)
+```
+
+### Cost-Stock Consistency Rule (Jul 13 2026, user-defined)
+
+**Rule**: "Si tiene costo debería tener stock, si no no" — Any item with a cost value in ANY cost column (COST_MIJARDIN, COST_SARACELY, etc.) MUST have a stock value > 0. If stock is 0 or empty, all cost values for that item should be cleared.
+
+**Application**: lumos.py applies this rule automatically — it clears cost values for items with portal stock=0. After running lumos, verify: `Items with cost but stock=0: 0`.
+
+**Exceptions**: Tierras (TIERRA-NEGRA, ABONO-ORGANICO, CASCARILLA-DE-ARROZ) are always at the END of INVENTARIO and should have empty cost columns (unless a specific supplier cost exists, which is rare).
+
+### Lumos Name-Matching Bug (CAJA POTE 120/180, Jul 13 2026)
+
+lumos.py matches portal items to sheet rows by normalized name. Items with near-identical names (e.g. `CAJA POTE 120_1000PCS` vs `CAJA POTE 180_450PCS`) can be **cross-matched** — the wrong stock value gets written to the wrong row.
+
+**Observed**: CAJA-POTE-1201000PCS (stock=0 in portal) got stock=450 in sheet, which belonged to CAJA-POTE-180450PCS.
+
+**Fix**: After running lumos, verify items with similar names by comparing portal stock vs sheet stock for at least the suspicious set:
+```python
+portal_stock = {code: stock}  # from by-code endpoint
+sheet_stock = {name: stock}    # from INVENTARIO!A:C
+# Compare items whose names share significant substring overlap
+```
+
+## Common Pitfalls (condensed)
+- `itemStockTotal` includes items on order → use `itemAvailableTotal` for sellable stock
+- PATCH requires UUID, not itemCode → always fetch `/by-code/{code}` first
+- PATCH with `prices` replaces entire array, doesn't merge
+- Missing `version` on PATCH → 409 Conflict
+- `expand=prices` on list endpoint returns items WITHOUT prices key; use `/by-code/{code}?expand=prices` instead
+- **Sales Quotations: `lineNumber` is REQUIRED** on every line — sequential integers starting from 1. All lines with `lineNumber: 0` cause `"duplicate lineNumber values: [0]"` error.
+- **Sales Quotations: All line fields required** — `itemId`, `itemCode`, `itemName`, `warehouseId/Code/Name`, `taxCategoryId/Code/Name`, `uomCode` — even `unitOfMeasure`. Missing any causes per-line validation failure.
+- **Sales Quotations: `expand=lines` may return empty** in subsequent GET even when lines were saved — trust `grandTotal` as ground truth.
+- **Item UUIDs drift within-session and between-sessions** — by-code endpoint returns different UUIDs than the list endpoint. Always fetch fresh via `/api/items/items/by-code/{code}` at session start. Never reuse list-endpoint IDs for SO payloads.
+- **PATCH isActive=True is more reliable than RESTORE** — `POST /api/items/items/{id}/restore` may return 200 with `isActive` still false. Use PATCH with `{"isActive": True, "version": version}` instead. On 409 Conflict, retry with `version + 1`.
+- No image upload via Items API → use Portal UI drag&drop
+- Price lists not manageable via API → create in Portal UI: Settings > Price Lists
+- Bearer token on Items → 401 (use X-Api-Key: ten_...)
+- Categories/Accounts → Bearer JWT required (not X-Api-Key)
+- Use hermes-agent venv Python (`~/.hermes/hermes-agent/venv/bin/python3`), not system python3 (PEP 668)
+- Google Sheets cell format cache: write empty string first (RAW), then value (USER_ENTERED) to clear currency formatting
+
+## Reference Files
+- `references/receipt-vision-workflow.md` — PIL rotation + vision_analyze to correct rotated RECIBOLM receipts
+- `references/bulk-creation-workflow.md` — step-by-step bulk create from source to portal
+- `references/stupefy-dedup-sheet-gap.md` — critial bug: dedup skip-list not appended to sheet
+- `references/stupefy-20260630.md` — complete session transcript of Jun 30 2026 bulk create (44 items, isActive fix, category assignment)
+- `references/stupefy-bulk-import-20260706.md` — fresh portal bulk import of 183 items (name overrides, code conflict resolution, activation)
+- `references/pricing-tax-endpoint.md` — price list discovery and price update via PATCH
+- `references/spell-commands.md` — spell workflow details
+- `references/inventario-stock-count.md` — stock counting pattern
+- `references/pet-friendly-classification.md` — pet-safe plant list
+- `references/sales-quotations-api.md` — SQ endpoint details and pitfalls
+- `references/sales-quotations-and-orders.md` — SO vs SQ comparison, SUPER EXTRA branches, invoice workflow
+- `references/business-partners-api.md` — BP CRUD patterns
+- `references/discord-bot-hermes-ezy.md` — HERMES_EZY Discord bot setup, token, guilds, channels
+- `references/sales-orders-curl-workflow.md` — SO creation via curl with full line fields, required IDs, item UUID drift handling
+
+## Templates
+- `templates/quick-start.py` — minimal example: list items with prices
+- `templates/bulk-create-items.py` — bulk creation from CSV boilerplate
+
+## Scripts
+- `scripts/lumos.py` — portal stock+price → Google Sheet (⚠️ check API key is current: script may reference old key `ten_3HW_...`. As of Jul 10 2026, working key: `ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE`. Also ensure `SALE_EXTRA` (not `SALE_SUPER`) is the price list. Range: `INVENTARIO!A1:D500`. When Google token expires, re-auth via setup.py --auth-url → --auth-code (see Google OAuth section above).)
+- `scripts/alohomora.py` — portal items+BPs → Airtable (partial)
+  - **Portal key**: passed as CLI arg (`sys.argv[1]`), NOT hardcoded.
+  - **Airtable key**: hardcoded at line 16 (`AIRTABLE_KEY = "patoz..."`). This key can expire — if the script fails with `AUTHENTICATION_REQUIRED`, generate a new PAT in Airtable (account settings > authentication) and update line 16.
+  - **urllib curl fix (Jul 12 2026)**: `portal_get()` patched to use `curl` subprocess instead of `urllib.request` because some API keys get 401 via urllib even with SSL workaround. The Airtable upsert still uses urllib (Airtable API doesn't have the same issue).
+  - **Scheduled cron job**: `jobs.json` runs this weekly (Sun 9AM). The portal API key in the cron prompt may expire independently — if you get `"invalid API key"` from the portal, ask the user for a fresh key and update the cron job.
+- `scripts/check_sheet_gaps.py` — find portal items not in sheet, print gap report
+- `scripts/extract_excel_images.py` — extract embedded images from .xlsx for bulk import
+
+## Reference Files
+- `references/purchase-orders-20260713.md` — summary of POs June 26-30 2026 (2,184 units, 7 POs, PHOTUS trace)
+- `references/cost-ingestion-matching.md` — supplier price list matching pitfall (false substring matches like BAMBU → BAMBU ENTRENZAS) — extract_base() function + false substring match pitfall
+- `references/supplier-costs-20260710.md` — full dataset of 7 supplier cost price lists (300+ item-supplier cost pairs)
