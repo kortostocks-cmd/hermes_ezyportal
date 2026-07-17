@@ -1,5 +1,5 @@
 model:
-  default: minimaxai/minimax-m3
+  default: deepseek-ai/deepseek-v4-flash
   provider: nvidia
   base_url: https://integrate.api.nvidia.com/v1
 providers: {}

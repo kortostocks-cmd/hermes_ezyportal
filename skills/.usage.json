@@ -276,14 +276,14 @@
     "archived_at": null,
     "created_at": "2026-06-17T18:04:49.146691+00:00",
     "created_by": "agent",
-    "last_patched_at": "2026-07-13T19:22:27.533496+00:00",
-    "last_used_at": "2026-07-13T19:21:05.275465+00:00",
-    "last_viewed_at": "2026-07-13T19:21:05.272811+00:00",
-    "patch_count": 365,
+    "last_patched_at": "2026-07-16T21:16:31.722431+00:00",
+    "last_used_at": "2026-07-16T21:19:44.003463+00:00",
+    "last_viewed_at": "2026-07-16T21:19:44.000848+00:00",
+    "patch_count": 406,
     "pinned": false,
     "state": "active",
-    "use_count": 261,
-    "view_count": 261
+    "use_count": 289,
+    "view_count": 289
   },
   "findmy": {
     "archived_at": null,
@@ -368,13 +368,13 @@
     "created_at": "2026-06-24T18:09:54.768557+00:00",
     "created_by": null,
     "last_patched_at": null,
-    "last_used_at": null,
-    "last_viewed_at": null,
+    "last_used_at": "2026-07-13T20:07:33.242692+00:00",
+    "last_viewed_at": "2026-07-13T20:07:33.229493+00:00",
     "patch_count": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 0,
-    "view_count": 0
+    "use_count": 1,
+    "view_count": 1
   },
   "google-workspace": {
     "archived_at": null,
@@ -991,14 +991,27 @@
     "archived_at": null,
     "created_at": "2026-06-30T14:46:41.320590+00:00",
     "created_by": null,
-    "last_patched_at": "2026-07-10T18:51:13.877621+00:00",
-    "last_used_at": "2026-07-13T18:39:29.959299+00:00",
-    "last_viewed_at": "2026-07-13T18:39:29.953927+00:00",
-    "patch_count": 24,
+    "last_patched_at": "2026-07-13T21:01:03.127068+00:00",
+    "last_used_at": "2026-07-16T20:46:26.293728+00:00",
+    "last_viewed_at": "2026-07-16T20:46:26.230343+00:00",
+    "patch_count": 27,
     "pinned": false,
     "state": "active",
-    "use_count": 26,
-    "view_count": 26
+    "use_count": 30,
+    "view_count": 30
+  },
+  "vivero-monthly-sales-reports": {
+    "archived_at": null,
+    "created_at": "2026-07-13T21:23:34.526401+00:00",
+    "created_by": "agent",
+    "last_patched_at": null,
+    "last_used_at": null,
+    "last_viewed_at": null,
+    "patch_count": 0,
+    "pinned": false,
+    "state": "active",
+    "use_count": 0,
+    "view_count": 0
   },
   "weights-and-biases": {
     "archived_at": null,

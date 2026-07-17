@@ -176,11 +176,16 @@ Current active price lists (always verify fresh each session):
 | COST_SUGEY | e38bab32-70c5-4b66-b16c-dc5cdb2dbaa4 | New Jul 2026 |
 | COST_SARACELY | 65399687-8f36-46af-8145-01b5d50198f0 | New Jul 2026 |
 | COST_MIJARDIN | fbd1e2fc-9386-4e7b-b8ee-b4ec501eead1a | New Jul 2026 |
+| COST_IAN | n/a (PO-only) | Discovered Jul 2026 — items from "Viveros ian" PO-2026-000028. Used in col J of INVENTARIO. |
 | **SALE_EXTRA** | **13ce22b6-0b29-4029-be65-42e8c23cb239** | **Only active sales price list (Aug 2026). SALE_PUBLIC and SALE_SUPER no longer exist.** Use for ALL Super Xtra branches. |
 
 > **CRITICAL**: `SALE_PUBLIC` and `SALE_SUPER` **no longer exist** in the tenant as of Jul 2026. If you need a sales price list, use `SALE_EXTRA`.
 > 
-> `COST_IAN`, `COST_JARDIN`, `COST_SARA`, `COST_ISMAEL`, and `COST_EDUARDO` also do not exist in the current tenant. Always verify via `GET /api/pricing-tax/price-lists?perPage=50` each session.
+> `COST_JARDIN`, `COST_SARA`, `COST_ISMAEL`, and `COST_EDUARDO` do not exist as formal price lists. However, POs may use these as `priceListCode` values. **Mapping**:
+> - `COST_JARDIN` → bpName=Viveros Mi Jardin → **COST_MIJARDIN** column (same supplier)
+> - `SALE_PUBLIC` → bpName=Vivero Sara Cely → **COST_SARACELY** column (same supplier, not a sales price list despite the code)
+> - `COST_IAN` → bpName=Viveros ian → **COST_IAN** column J (discovered Jul 2026, 5 items)
+> Always verify new priceListCode values in POs each session.
 
 ### Item Group & Class (fetch fresh each session, DO NOT hardcode)
 Fetch at the START of every session:
@@ -213,7 +218,16 @@ No item classes exist on the vivero tenant as of Jul 2026 (endpoint returns empt
 
 **Endpoint**: `GET /api/commerce/purchase-orders` for listing, `GET /api/commerce/purchase-orders/{id}?expand=lines` for single PO with line items.
 
-**Keys**: As of Jul 10 2026, the IK key (`ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE`) DOES work for both items + POs + SOs. The PRQ key (`ten_PRQ2XeyfLOvi_8Vf1528LoJgV7IlTqTqcQi5LLO4owg`) expired mid-session. The old key (`ten_6lRpIW7SBXsZOHylXp80MTf-qFAdW-DjKWJITOdF6bk`) also expired earlier. ⚠️ API keys may be silently rotated mid-session — when you get sudden 401, try an alternative key or ask the user.
+**Keys — actively rotated through 2026**:
+| Period | Working key | Status |
+|---|---|---|
+| Jul 2026 | `ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE` (IK key) | ⚠️ **Expired by 13 Jul 2026** ("invalid API key") |
+| Jul 2026 (early) | `ten_PRQ2XeyfLOvi_8Vf1528LoJgV7IlTqTqcQi5LLO4owg` | Expired mid-session |
+| Jul 2026 | `ten_6lRpIW7SBXsZOHylXp80MTf-qFAdW-DjKWJITOdF6bk` | Expired earlier |
+| Jul 2026 | `ten_Zk271QDTbmEUkcXD4pu4LKvMSgv0n8-b6oyz6SCBjxU` | Expired by 13 Jul |
+| **Jul 13 2026 → present** | **`ten_BvfgJJOvXHbkjuQKMpscKmFo92HMwl3-2UNsbVWYq4g`** | **CONFIRMED working: items + POs + SOs** |
+
+⚠️ **API keys may be silently rotated mid-session — usually every 2-3 weeks.** When you get sudden 401, switch to the most recent `ten_Bvfg...` key or ask the user for a fresh one. Bearer JWTs are different and unauthorized for these endpoints.
 
 **List quirks**: `expand=lines` on the LIST endpoint returns POs with empty `lines` array. Only fetch by single UUID returns actual line items with `unitPrice`. Always iterate: list first, then fetch each PO individually.
 
@@ -270,34 +284,48 @@ Price list ID: `d1eeecb8-e5a8-4f89-90d8-fc4a6480f902`. Items include ALBAHACA VE
 #### Agro&Gardens (COST_A&G) — 8 items
 Price list ID: `3957783e-b384-4bf9-a6a5-7982f7ad8d2f`. Items include AGAVE AMARILLO ($5), MONSTERA DELICIOSA ($4.50), PHILODENDRO NEON ($3), PALMA BISMARKIA GRANDE ($20).
 
-#### Vivero Sara Cely (COST_SARACELY) — 8+ items (many pending)
-Price list ID: `65399687-8f36-46af-8145-01b5d50198f0`. Current portal items include APIO ($1.50), CIELITO AZUL ($0.85), MILLONARIA ZAMIOCULCA ($4.50), MILLONARIA ZAMIOCULCA NEGRA ($8), MOLLEJA ($0.85).
-**Jul 2026**: User has a larger list of ~60 items with costs from Saracely (long descriptive names with pot sizes). NOT loaded yet — user said "no metas los costos todavía". See `references/cost-saracely-mapping-20260710.md` for the full mapping.
+#### Vivero Sara Cely (COST_SARACELY) — 30 items (8 portal + 21 from SALE_PUBLIC PO)
+Price list ID: `65399687-8f36-46af-8145-01b5d50198f0`.
+**Items from portal (COST_SARACELY)**: APIO ($1.50), CIELITO AZUL ($0.85), MILLONARIA ZAMIOCULCA ($4.50), MILLONARIA ZAMIOCULCA NEGRA ($8), MOLLEJA ($0.85).
+**Items from PO-2026-000029 (SALE_PUBLIC, same supplier)**: CACTUS PEQUENO ($0.89), SUCULENTA PEQUENA ($0.53), ROSSETTA ($0.79), FICUS LYRATA ($23.95), MARGINATA ($15.00), COBRA VERDE ($6.00), GINGER ($8.00), PALMA MULTIPLE ($1.75), ESCUDO PERSA ($1.50), CROTO MAMY AMARILLO ($4.75), PALMA MADAGASCAR ($25.00), CIPRE RASTRERO ($12.00), PIE DE NINO TRADICIONAL ($0.85), PIE DE NINO VERDE ($1.00), ESPARRAGO MEYERI ($4.50), CRINUM ASIATICO VARIEGADO ($8.00), FICUS LYRATA 3 RAMAS (HASTA 175CM) ($60.00), PHOTOS MULTI RAMA ($7.00), MONSTERA ADANSONII ($6.50), HAWORTHIA ($48.80), MICKY ($37.00).
+**Warning**: SALE_PUBLIC is NOT a sales price list despite its name — it's a supplier cost PO. Map to COST_SARACELY column.
+**Jul 2026**: User has a larger list of ~60 items with costs from Saracely (long descriptive names with pot sizes). NOT loaded yet — user said "no metas los costos todavía". See `references/cost-saracely-mapping-20260710.md`.
 
 #### Vivero Sugey (COST_SUGEY) — 5 items
 Price list ID: `e38bab32-70c5-4b66-b16c-dc5cdb2dbaa4`. Items include PALMA ABANICO ($3), PALMA FENIX ($8), PALMA NAVIDAD ($7), PALMA ROJA GRANDE ($20), PALMA WASHINTONIA ($20).
 
-#### Viveros ian (COST_MIJARDIN — same price list as Viveros Mi Jardin) — 5 items
-Items include HIERBA BUENA ($0.80), MENTA ($0.80), ROSITA MINIATURA ($2), SUCULENTAS GRANDE ($2.25), SUCULENTAS MEDIANAS ($1.25).
+#### Viveros ian (COST_IAN) — 5 items
+PO-2026-000028 (priceListCode=COST_IAN, bpName=Viveros ian). Items include ALCANCEL ($0.60), DALIA ($2.25), and 3 others.
+This is a separate price list from COST_MIJARDIN (even though both are "Viveros" suppliers). Stored in col J (COST_IAN) of INVENTARIO.
 
-### Google OAuth Re-Authentication
+### Google OAuth Token — FAST inline refresh (Jul 16 2026)
 
-When the Google token expires (usually every 7 days), you get `invalid_grant: Token has been expired or revoked`. To re-authenticate:
+The full re-auth flow (browser redirect → exchange code) is heavy. For routine token-mid-session-expiry (every ~7 days), you can **refresh inline without bothering the user**:
 
-```bash
-# 1. Get auth URL
-~/.hermes/hermes-agent/venv/bin/python3 \
-  ~/.hermes/profiles/ezy_portal_expert/skills/productivity/vivero-google-sheets/scripts/setup.py \
-  --auth-url
-
-# 2. User opens URL in browser, authorizes, copies the redirect URL
-# 3. Exchange code
-~/.hermes/hermes-agent/venv/bin/python3 \
-  ~/.hermes/profiles/ezy_portal_expert/skills/productivity/vivero-google-sheets/scripts/setup.py \
-  --auth-code "http://localhost/?code=..."
+```python
+import json, urllib.request, urllib.parse
+t = json.load(open("~/.hermes/profiles/ezy_portal_expert/google_token.json"))
+data = urllib.parse.urlencode({
+    'client_id': t['client_id'],
+    'client_secret': t['client_secret'],
+    'refresh_token': t['refresh_token'],
+    'grant_type': 'refresh_token',
+}).encode()
+req = urllib.request.Request(t['token_uri'], data=data,
+    headers={'Content-Type':'application/x-www-form-urlencoded'})
+new = json.loads(urllib.request.urlopen(req,timeout=15).read())
+t['token'] = new['access_token']
+json.dump(t, open("…/google_token.json",'w'))
 ```
 
-The token is saved to `~/.hermes/profiles/ezy_portal_expert/google_token.json` and includes a refresh_token valid for ~7 days.
+A reusable wrapper lives at `scripts/refresh_google_token.py`:
+```bash
+~/.hermes/hermes-agent/venv/bin/python3 scripts/refresh_google_token.py
+# → "OK refreshed, expires: 2026-07-16T18:03:24Z"
+```
+
+Only the full browser re-auth is needed when the **refresh_token itself** expires (~7 days of non-use), which produces `invalid_grant: Token has been expired or revoked` on the refresh call.
+
 
 ### MCP (Model Context Protocol) Endpoint
 
@@ -311,7 +339,9 @@ hermes mcp add ezy-portal --url http://vivero.ezyts.com/mcp
 ### Google Sheet
 ID: `1jYZn3Kd8nIMlRxcQ1nC3K6C3pIzpGPemsO8bc4qG3NE`
 Tabs:
-- **INVENTARIO** (A=PLANTA, B=SALE_EXTRA, C=STOCK, D=COST_MIJARDIN, E=COST_SARACELY, F=COST_HACIENDA, G=COST_EDWIN, H=COST_SUGEY, I=COST_A&G) — ~190 rows. Sorted alphabetically by A. TIERRAS items at end.
+- **INVENTARIO** (verified col order via fresh re-read Jul 16 2026): A=PLANTA, B=SALE_EXTRA, C=STOCK, **D=COST_MIJARDIN**, E=COST_EDWIN, F=COST_HACIENDA, **G=COST_A&G**, H=COST_SARACELY, I=COST_SUGEY, J=COST_IAN — ~193 rows. Sorted alphabetically by A. TIERRAS items at end.
+  - **⚠️ Col-D column drift**: older memory says D=COST_A&G and G=COST_MIJARDIN — this is WRONG, the actual sheet has them swapped. Any ad-hoc patch script must read A1:J1 at session start and use letter-accurate indices. lumos.py and inventory_audit_po_costs.py handle this correctly (they read headers dynamically).
+  - Row data: A=name, B=sale price, C=stock, D-J=cost columns as listed.
 - **REPORTS** (A=PLANTA, B=COSTO, C=SALE, D=MARGIN %) — same row count as INVENTARIO. Cost shows range `$min-$max` when multiple suppliers. Margin shows range too.
 - **SOLD_AMOUNT** (⚠️ name has trailing space: `'SOLD_AMOUNT '`) — (A=PLANTA, B=AMOUNT_SOLD, C=TOTAL_COST, D=TOTAL_SALE, E=TOTAL). Last row = TOTAL sums.
 Token: `~/.hermes/profiles/ezy_portal_expert/google_token.json`
@@ -383,9 +413,73 @@ Key differences from Sales Quotations:
 - **validUntil**: Set to `documentDate + 30 days` (e.g., `"2026-07-05T00:00:00Z"`).
 - **Response key**: uses `documentNumber` (NOT `orderNumber`). Response format: `{"id", "documentNumber": "SO-2026-000025", ...}`.
 - **Total**: May return `null` (`"totalAmount": null`) for draft orders — prices are calculated on finalization, not on draft creation.
-- **⚠️ Discount auto-application by portal (Jul 2026)**: The portal may auto-apply a `discountPercent` (e.g. 5%) to newly created SOs even when `discountPercent` is NOT included in the POST payload. This appears to be triggered by the payment terms config (`paymentTermsId: 9025dae9`). Observed on 5 SOs (CHITRE, LAS ACACIAS, EL LAGO, SANTIAGO TERMINAL, CHORRERA). **Always check `discountPercent` in the response after SO creation** — if it's > 0 and the user didn't ask for a discount, warn the user immediately. The user explicitly said: "no pongas ese descuento mas sin avisarme okay".
+- **⚠️ Discount auto-application by portal (Jul 13 2026, HARD RULE)**: The portal may auto-apply a `discountPercent` (e.g. 5%) to newly created SOs even when `discountPercent` is NOT included in the POST payload. This appears to be triggered by the payment terms config (`paymentTermsId: 9025dae9`). Observed on **6 SOs** (Jul 2026 baseline): SO-000068 chitre, SO-000072 las acacias, SO-000075 el Lago, SO-000079 santiago terminal, SO-000081 chorrera, SO-000090 penonome. Total discount observed: $25.44 across all 6 SOs (sum of `subTotal - grandTotal`). **Always check `discountPercent` and `grandTotal` in the response after SO creation** — if discount was applied and the user didn't ask for it, warn immediately: "El portal aplicó X% descuento automáticamente". User explicit rule: "no pongas ese descuento mas sin avisarme okay pon lo en el skill".
+
+  **"wtf solo arreglalo" pattern (Jul 16 2026)**: When the user gives terse "wtf solo arreglalo" / "solo arreglalo" / "dle" — execute the obvious fix without re-asking. If the gap is unambiguous from existing rules (e.g. AGAVE AMARILLO/VERDE → AGAVE GIGANTE per MANUAL_ALIASES rule), just do it. After all fixes, present a one-line diff summary, not a paragraph explaining why. **Don't fix unrelated cells the user didn't ask about** — if a neighboring column has a stale value, leave it alone; the user only said the named issue. Style cue: terse error correction > verbose option lists.
+
+  **Discount detection pattern (run this AFTER every POST /api/commerce/sales-orders)**:
+  ```python
+  resp = json.loads(r.stdout)
+  disc = float(resp.get("discountPercent", 0) or 0)
+  sub = float(resp.get("subTotal", 0) or 0)
+  grand = float(resp.get("grandTotal", 0) or 0)
+  if disc > 0 and grand < sub:
+      print(f"⚠️ Portal aplicó {disc}% descuento: ${sub} → ${grand} (diff ${sub-grand:.2f})")
+      # DO NOT proceed silently — notify user, ask whether to keep or revert
+  ```
+
+  **SOLD_AMOUNT TOTAL ↔ grandTotal sum invariant (Jul 16 2026)**: The PORTAL TOTAL row must equal `sum(grandTotal)` of all SOs drift = $0.00. To preserve this when the portal auto-applied discount to some SOs:
+
+  ```python
+  for so in so_files:
+      sub = float(so['subTotal']); grand = float(so['grandTotal'])
+      ratio = (grand / sub) if sub > 0 else 1.0
+      for ln in so['lines']:
+          qty = float(ln['quantity']); up = float(ln['unitPrice'])
+          # Apply per-line discount ratio to redistribute proportionally
+          sale_per[nk] += qty * up * ratio
+  ```
+
+  Then `sum(sale_per.values()) == TOTAL_GRAND`. Verified Jul 16 2026: 49 items, 3,848 units, $6,856.30 ✓.
+
+  **PO aggregation with MANUAL_ALIASES at PO stage (Jul 16 2026)**: The "Item rename-redirect for cost" pattern below is half of what you need. The OTHER half is applying aliases when iterating PO lines, not after. Pattern:
+
+  ```python
+  MANUAL_ALIASES = {
+      'AGAVE AMARILLO': 'AGAVE GIGANTE',
+      'AGAVE VERDE': 'AGAVE GIGANTE',
+      'PINO ENANO': 'PINO BONSAI',
+      'PINO ROMANO': 'CIPRE THUJA',
+      # BOMBERO→ROMERO, CHOCOLATE→CHAVELITAS, NOVIAS→NOVIO CHINO handled by name_key()
+  }
+  for ln in po['lines']:
+      nk = name_key(ln.get('itemName'))
+      if nk in MANUAL_ALIASES:
+          nk = name_key(MANUAL_ALIASES[nk])
+      cost_map[nk][col].append(price)
+  ```
+
+  Why this matters: AGAVE GIGANTE row in sheet had been getting empty COST_A&G after PO-2026-000021 because the PO lines used AGAVE AMARILLO/VERDE — without aliasing at PO stage, the cost_map keyed by AGAVE AMARILLO/VERDE which has no sheet row. Apply the alias BEFORE inserting into cost_map, then the merged canonical target gets the price.
+
+  **Stock vs Buy cross-check (Jul 16 2026 diagnostic)**: After lumos and audit, cross-reference sheet STOCK column C against PO buys for the analysis window. Items where `sheet_stock < buy_qty` are candidates that may need stock bump (or are portal-side artifacts):
+  ```python
+  for nk, bu in buy_qty.items():
+      s = sheet_stock.get(nk, 0)
+      diff = s - bu
+      if diff < 0:
+          print(f"{nk:40} buy={bu} sheet={s} → short by {-diff}")
+  ```
+  Reported 9 shortages Jul 16 2026: PHOTUS (-17, has negative stock), AGAVE AMARILLO/VERDE (-4 each, merged elsewhere), CINTA MALA MADRE, COLEOS, SUCULENTA PEQUENA, CACTUS PEQUENO, RUDA, PALMA ABANICO. Surface and let user decide whether to add to stock, not auto-correct.
+
+  **Sheet calculation preference (Jul 13 2026, user decision)**:
+  - When user says "pon el total pasado" / refers to historical totals → use `grandTotal` from SOs (matches what was actually invoiced/charged, includes any portal-applied discounts). User confirmed: "esta mal ese descuento pero no pasa nada solo pon el total pasado no el de 827 sino 804".
+  - When user asks for clean totals without discounts → use `subTotal` (line item totals before any portal discounts).
+  - **Default for SOLD_AMOUNT / VENTAS_JUNIO sheets**: use `grandTotal` to match historical invoice reality.
+  - When source data has portal discount and user wants it removed: redistribute proportionally across line items: `line_after = (line_total / subTotal) * grandTotal`. Do NOT zero out — keep invoice realism.
+  - **NEVER silently strip the discount** without telling the user. Always report discount amount before deciding.
 - **Pre-creation summary**: MUST be a compact table — NOT verbose prose. Show: Cliente, Factura/N° referencia, Fecha, Líneas, Total. Ask "¿Creo la orden?" concisely. User responds with "dle" or "dle+" to confirm.
 - **urllib vs curl**: Some API keys (`ten_Zk271...`) work fine with Python urllib for SO creation; others (`ten_3HW_...`) get 401. Prefer curl via subprocess for reliability. For complex payloads (22+ lines), write to `/tmp/so_<branch>.json` first, then `curl -s -X POST ... -d @/tmp/so_<branch>.json`. The urllib approach (via execute_code) can succeed if item UUIDs are correct and the key supports it.
+  - **⚠️ `execute_code` may be silently blocked (Jul 13 2026)**: In a non-cron session, `execute_code` can return `"BLOCKED: execute_code runs arbitrary local Python (including subprocess calls that bypass shell-string approval checks). Cron jobs run without a user present to approve it."` — even though you're NOT in a cron context. If you hit this, fall back to **inline terminal** with `curl` directly. Don't fight the blocker. Do not invent plausible outputs from Python — switch to terminal/curl.
 - **Client IDs confirmed working Aug 2026**: 
   - EL LAGO: `78532e5e-caa7-4863-aa80-7090e8e22257` (CL-0019)
   - LOS PUEBLOS: `a8cea960-d200-4222-8654-6cda0093d6b9` (CL-0005)
@@ -510,13 +604,50 @@ When presenting a pre-creation summary, the user often responds with **wave-afte
 - **DO NOT auto-exclude items from past sessions** — each invoice is processed independently. Just because an item was excluded in a previous order (e.g., MARIGOLD was excluded in Jun 2026) does not mean it should be excluded now. The user will ask '¿por qué sin X?' if you remove something they didn't say to remove. Only exclude if the current invoice explicitly marks N/C or the user says to exclude now.
 - **If a line fails with `"item is not active"`**: reactivate the item via PATCH `{isActive: True, version}`, then retry the full payload. Do NOT skip the line without asking.
 
-### Item Name Corrections & Sheet Matching (vivero tenant, Jul 2 2026)
+### Item Name Aliases (Jul 13 2026, user-confirmed)
 
-**From Vivero Rose invoices → Sheet INVENTARIO names:**
+These names appear in invoices/portal but should be **merged into a single canonical row** when building sheet reports. Confirmed across multiple sessions.
 
-| Invoice name | Sheet name |
-|---|---|
-| HIERBA BUENA | HIERBA BUENA |
+| Source name(s) | Canonical name | Rule |
+|----------------|----------------|------|
+| PINO ENANO | PINO BONSAI | Same plant — Jul 16 2026. User confirmed. Keep in MANUAL_ALIASES for any POs/SOs referencing old name. |\n| POTHOS | PHOTUS | Same plant. Merge POTHOS stock/sales into PHOTUS row. User: "no pongas POTHOS, es PHOTUS" |
+| BOMBERO, BOMBERO VR | ROMERO | Same plant — sum quantities |
+| CHOCOLATE, CHOCOLATITO | CHAVELITAS | Same plant — sum quantities |
+| NOVIAS | NOVIO CHINO | Same plant — sum quantities |
+| ZAMIOCULCA, MILLONARIA SAMAQUILA VR, MILLONARIA SAMIAOCULA VR | MILLONARIA ZAMIOCULCA | Same plant |
+| MILLONARIA MEGRA VR, MILLONARIA NEGRA VR | MILLONARIA ZAMIOCULCA NEGRA | Same plant |
+| PHOTUS VR, PHOTUS (invoice) | PHOTUS | Drop VR suffix |
+| AJÍ BOLITA VR, AJI BOLITA DECORATIVO VR | AJI BOLITA | Drop VR |
+| ROMERO VR | ROMERO | Drop VR + canonical |
+
+**Canonical `name_key()` helper**:
+
+```python
+import unicodedata, re
+
+def name_key(n):
+    n = (n or '').upper()
+    if n == "POTHOS":
+        return "PHOTUS"
+    if n == "BOMBERO":
+        return "ROMERO"
+    if n in ("CHOCOLATE", "CHOCOLATITO"):
+        return "CHAVELITAS"
+    if n == "NOVIAS":\n        return "NOVIO CHINO"\n    if n == "PINO ENANO":\n        return "PINO BONSAI"\n    if n.endswith(" VR"):
+        n = n[:-3]
+    n = unicodedata.normalize("NFD", n)
+    n = re.sub(r"[\u0300-\u036f]", "", n)
+    return re.sub(r"\s+", " ", n).strip()
+```
+
+**Apply this BEFORE grouping by item** in any script that builds:
+- SOLD_AMOUNT (sales aggregation)
+- REPORTS (cost ranges)
+- INVENTARIO (dedupe by name)
+
+Skip multiplication by alias-name items in PHOTUS, BOMBERO, CHAVELITAS, NOVIO CHINO.
+
+ENA | HIERBA BUENA |
 | MENTA | MENTA |
 | ROMERO | ROMERO |
 | ALBAHACA | ALBAHACA VERDE |
@@ -564,7 +695,93 @@ When presenting a pre-creation summary, the user often responds with **wave-afte
 | MINI UVAS | Excluir / no existe en portal |
 | MARIGOLD VR | PL-MARIGOLD-VR (crear item nuevo si no existe)
 | PHOTUS VR | PHOTUS (PL-PHOTUS)
-| TRADESCANTA ZEBRINA CUCAR / TRADESCANTIA ZEBRINA CUCARACHA | TRADESCANTIA ZEBRINA CUCARACHA (PL-TRADESCANTIA-ZEBRINA-CUCARACHA)\n| EPISCIAS VR | EPISCIAS VR (PL-EPISCIAS-VR) — itemCode: PL-EPISCIAS-VR, id: 28ac04cf-4f57-400e-9809-f8d393a64170\n| SABILA ALOE MEDIANA VR | SABILA ALOE MEDIANA (PL-SABILA-ALOE-MEDIANA) — id: 3e7971a1-8582-4a4c-bb3f-1543fa48672a\n| CELOZIA VR | CELOCIA (PL-CELOCIA)\n| AGLONEMAS VR | AGLONEMAS (PL-AGLONEMAS)\n| COLEOS VR / COLES VR CORATIVO VR | COLEOS (PL-COLEOS)\n| GRONFENA VR | GRONFENA (PL-GRONFENA) — sí existe, buscar código PL-GRONFENA (sin VR)\n| CACTUS VARIADOS PEQUEÑO VR | CACTUS PEQUEÑO (PL-CACTUS-PEQUENO)\n| MILLONARIA MEGRA VR / MILLONARIA NEGRA VR | MILLONARIA ZAMIOCULCA NEGRA (PL-MILLONARIA-ZAMIOCULCA-NEGRA)\n| MILLONARIA SAMAQUILA VR / MILLONARIA SAMIAOCULA VR | MILLONARIA ZAMIOCULCA (PL-MILLONARIA-ZAMIOCULCA)\n| AJI BOLITA AMAOCUILA VR / AJI BOLITA DECORATIVO VR | AJI BOLITA (PL-AJI-BOLITA)\n| PALO DE BRAZIL MEDIANO VR | PALO DE BRASIL (PL-PALO-DE-BRASIL)\n| PALMA ABANICO VR | PALMA ABANICO (PL-PALMA-ABANICO)\n| CRISANTEMOS EN POTE VR | CRISANTEMOS (PL-CRISANTEMOS)\n\n### VR Item Code Pattern\nItems from Vivero Rose with "VR" suffix in their invoice name often have item codes WITHOUT the `-VR` suffix in the portal:\n- HIERBA BUENA VR → code: `PL-HIERBA-BUENA` (NOT PL-HIERBA-BUENA-VR)\n- RUDA VR → code: `PL-RUDA`\n- ROMERO VR → code: `PL-ROMERO`\n- OREGANO VR → code: `PL-OREGANO`\n- CHAVELITAS VR → code: `PL-CHAVELITAS`\n- MENTA VR → code: `PL-MENTA`\nAlways search by both with and without VR suffix when using by-code endpoint.\n\n### Super Xtra Branch Codes (complete list)\nBranches of SUPER EXTRA / Super Xtra (same RUC 356-19-77860):\n- via israel: CL-0035 (32249c40...)\n- los pueblos: CL-0005 (a8cea960...)\n- albrook: CL-0017 (db64ad3e...)\n- monterico: CL-0006 (083fb553...)\n- el Lago: CL-0019 (78532e5e...)\n- las acacias: CL-0004 (6bf480fd...)\n- las tablas: CL-0024 (cbb72b57...)\n- chorrera: CL-0002 (3d7f8040...)\n- marqueza: CL-0030 (36ebc81e...)\n- condado: CL-0010 (15ee6af1...)\n- aguadulce: CL-0027 (d9cd6c5e...)\n- penonome: CL-0028 (b3b486a9...)\n- **4 Altos**: CL-0036 (46765852-9ebe-48ba-8019-eac6b22281a3)\n- **Chanis**: CL-0040 (d73abea9-fac1-43ac-9c1b-236c3c06b358)\n\nBranches (full UUIDs verified Aug 2026):\n- Santiago Terminal: 62755ad8-2b10-4bd7-8974-0f635a2a04ef (CL-0021)
+| TRADESCANTA ZEBRINA CUCAR / TRADESCANTIA ZEBRINA CUCARACHA | TRADESCANTIA ZEBRINA CUCARACHA (PL-TRADESCANTIA-ZEBRINA-CUCARACHA)\n| EPISCIAS VR | EPISCIAS VR (PL-EPISCIAS-VR) — itemCode: PL-EPISCIAS-VR, id: 28ac04cf-4f57-400e-9809-f8d393a64170\n| SABILA ALOE MEDIANA VR | SABILA ALOE MEDIANA (PL-SABILA-ALOE-MEDIANA) — id: 3e7971a1-8582-4a4c-bb3f-1543fa48672a\n| CELOZIA VR | CELOCIA (PL-CELOCIA)\n| AGLONEMAS VR | AGLONEMAS (PL-AGLONEMAS)\n| COLEOS VR / COLES VR CORATIVO VR | COLEOS (PL-COLEOS)\n| GRONFENA VR | GRONFENA (PL-GRONFENA) — sí existe, buscar código PL-GRONFENA (sin VR)\n| CACTUS VARIADOS PEQUEÑO VR | CACTUS PEQUEÑO (PL-CACTUS-PEQUENO)\n| MILLONARIA MEGRA VR / MILLONARIA NEGRA VR | MILLONARIA ZAMIOCULCA NEGRA (PL-MILLONARIA-ZAMIOCULCA-NEGRA)\n| MILLONARIA SAMAQUILA VR / MILLONARIA SAMIAOCULA VR | MILLONARIA ZAMIOCULCA (PL-MILLONARIA-ZAMIOCULCA)\n| AJI BOLITA AMAOCUILA VR / AJI BOLITA DECORATIVO VR | AJI BOLITA (PL-AJI-BOLITA)\n| PALO DE BRAZIL MEDIANO VR | PALO DE BRASIL (PL-PALO-DE-BRASIL)\n| PALMA ABANICO VR | PALMA ABANICO (PL-PALMA-ABANICO)\n| CRISANTEMOS EN POTE VR | CRISANTEMOS (PL-CRISANTEMOS)\n\n### Negative Stock on Tierras (Jul 13 2026, observed)
+
+**Symptom**: Portal returns `itemStockTotal` negative for some tierra items:
+- TIERRA NEGRA: -175 (was -50)
+- ABONO ORGANICO: -48 (was -12)
+
+**Root cause**: Sales of tierras-only invoices subtract from a stock that was already at 0 — the portal hasn't reconciled PO inflows. This is a **portal-side reconciliation issue**, not a sheet bug.
+
+**What NOT to do**:
+- Don't try to PATCH stock to a positive value. The X-Api-Key (tenant) has read-only access for stock; Bearer JWT is required for inventory adjustments. PATCH returns 401/403.
+- Don't fabricate positive values in the sheet to "fix" the visual — sheet will drift from portal truth.
+
+**What to do**:
+- Surface as informational in the report. The user knows these are portal-side stockouts.
+- Recommend the user either (a) create a PO with the items to bring stock above 0, or (b) adjust stock manually in Portal UI. Don't write code to "fake" the inventory.
+
+### Item Name Corrections & Sheet Matching (vivero tenant, Jul 2 2026)
+
+**From Vivero Rose invoices → Sheet INVENTARIO names:**
+
+| Invoice name | Sheet name |
+|---|---|
+| HIERBA BUENA | HIERBA BUENA |
+| MENTA | MENTA |
+| ROMERO | ROMERO |
+| ALBAHACA | ALBAHACA VERDE |
+| ORÉGANO | OREGANO |
+| TOMILLO | TOMILLO |
+| RUDA | RUDA |
+| CHAVELITAS | CHAVELITAS |
+| CINTAS / CINTA MALA MADRE | CINTA MALA MADRE |
+| CACTUS (variados) | CACTUS MEDIANO |
+| CACTUS VARIADOS PEQUEÑO VR | CACTUS PEQUEÑO (PL-CACTUS-PEQUENO) — buscar PL-CACTUS-PEQUENO |
+| CORONITAS | CORONITA |
+| CLAVELES / CLAVELITO | CLAVELITO |
+| TORENIAS | TORENIA |
+| JADE | JADE |
+| MINI JADE | MINI JADE |
+| CRISANTEMOS | CRISANTEMOS |
+| AJÍ BOLITA | AJI BOLITA |
+| NOVIOS / NOVIAS | NOVIO CHINO |
+| LENGUA MINI | LENGUA DE SUEGRA MINI |
+| LENGUA ENANA | LENGUA DE SUEGRA ENANA |
+| PETUNIN | PETUNIN |
+| CELOCIA | CELOCIA |
+| ROSA | ROSA |
+| PALMA ROJA | PALMA ROJA |
+| ROSITA MINIATURA | ROSITA MINIATURA |
+| SUCULENTAS VARIADAS PEQUEÑA | SUCULENTA PEQUEÑA |
+| SUCULENTAS VARIADAS MEDIANA | SUCULENTAS MEDIANAS |
+| SUCULENTAS VARIADAS GRANDE | SUCULENTAS GRANDE |
+| IXORA | IXORA |
+| FITONIA ROJA | FITONIA ROJA |
+| SÁBILA ALOE PEQUEÑA | SABILA ALOE PEQUENA |
+| MOLLEJA / MOLLEJITAS | MOLLEJA |
+| APIO | APIO |
+| CIELITO AZUL | CIELITO AZUL |
+| ZAMIOCULCA | MILLONARIA ZAMIOCULCA |
+| ZAMIOCULCA NEGRA | MILLONARIA ZAMIOCULCA NEGRA |
+| CAÑA DEL BRASIL | PALO DE BRASIL |
+| ALOCASIA LAVA | ALOCASIA LAVA ROJA |
+| FICUS TRIANGULAR | FICUS TRIANGULAR GRANDE |
+| HELECHO | HELECHOS |
+| PALO DE BRASIL DE ESCRITORIO | PALO DE BRASIL DE ESCRITORIO |
+| CACTUS HUESO DE DRAGÓN | CACTUS HUESO DE DRAGON |
+| CELOSIA | CELOCIA |
+| BOMBERO | = ROMERO (sumar cantidades) |
+| CHOCOLATE | = CHAVELITAS (sumar cantidades) |
+| MINI UVAS | Excluir / no existe en portal |
+| MARIGOLD VR | PL-MARIGOLD-VR (crear item nuevo si no existe) |
+| PHOTUS VR | PHOTUS (PL-PHOTUS) |
+| TRADESCANTA ZEBRINA CUCAR / TRADESCANTIA ZEBRINA CUCARACHA | TRADESCANTIA ZEBRINA CUCARACHA (PL-TRADESCANTIA-ZEBRINA-CUCARACHA) |
+| EPISCIAS VR | EPISCIAS VR (PL-EPISCIAS-VR) — itemCode: PL-EPISCIAS-VR, id: 28ac04cf-4f57-400e-9809-f8d393a64170 |
+| SABILA ALOE MEDIANA VR | SABILA ALOE MEDIANA (PL-SABILA-ALOE-MEDIANA) — id: 3e7971a1-8582-44a4c-bb3f-1543fa48672a |
+| CELOZIA VR | CELOCIA (PL-CELOCIA) |
+| AGLONEMAS VR | AGLONEMAS (PL-AGLONEMAS) |
+| COLEOS VR / COLES VR CORATIVO VR | COLEOS (PL-COLEOS) |
+| GRONFENA VR | GRONFENA (PL-GRONFENA) — sí existe, buscar código PL-GRONFENA (sin VR) |
+| CACTUS VARIADOS PEQUEÑO VR | CACTUS PEQUEÑO (PL-CACTUS-PEQUENO) |
+| MILLONARIA MEGRA VR / MILLONARIA NEGRA VR | MILLONARIA ZAMIOCULCA NEGRA (PL-MILLONARIA-ZAMIOCULCA-NEGRA) |
+| MILLONARIA SAMAQUILA VR / MILLONARIA SAMIAOCULA VR | MILLONARIA ZAMIOCULCA (PL-MILLONARIA-ZAMIOCULCA) |
+| AJI BOLITA AMAOCUILA VR / AJI BOLITA DECORATIVO VR | AJI BOLITA (PL-AJI-BOLITA) |
+| PALO DE BRAZIL MEDIANO VR | PALO DE BRASIL (PL-PALO-DE-BRASIL) |
+| PALMA ABANICO VR | PALMA ABANICO (PL-PALMA-ABANICO) |
+| CRISANTEMOS EN POTE VR | CRISANTEMOS (PL-CRISANTEMOS) |
+
+### VR Item Code Pattern\nItems from Vivero Rose with "VR" suffix in their invoice name often have item codes WITHOUT the `-VR` suffix in the portal:\n- HIERBA BUENA VR → code: `PL-HIERBA-BUENA` (NOT PL-HIERBA-BUENA-VR)\n- RUDA VR → code: `PL-RUDA`\n- ROMERO VR → code: `PL-ROMERO`\n- OREGANO VR → code: `PL-OREGANO`\n- CHAVELITAS VR → code: `PL-CHAVELITAS`\n- MENTA VR → code: `PL-MENTA`\nAlways search by both with and without VR suffix when using by-code endpoint.\n\n### Super Xtra Branch Codes (complete list)\nBranches of SUPER EXTRA / Super Xtra (same RUC 356-19-77860):\n- via israel: CL-0035 (32249c40...)\n- los pueblos: CL-0005 (a8cea960...)\n- albrook: CL-0017 (db64ad3e...)\n- monterico: CL-0006 (083fb553...)\n- el Lago: CL-0019 (78532e5e...)\n- las acacias: CL-0004 (6bf480fd...)\n- las tablas: CL-0024 (cbb72b57...)\n- chorrera: CL-0002 (3d7f8040...)\n- marqueza: CL-0030 (36ebc81e...)\n- condado: CL-0010 (15ee6af1...)\n- aguadulce: CL-0027 (d9cd6c5e...)\n- penonome: CL-0028 (b3b486a9...)\n- **4 Altos**: CL-0036 (46765852-9ebe-48ba-8019-eac6b22281a3)\n- **Chanis**: CL-0040 (d73abea9-fac1-43ac-9c1b-236c3c06b358)\n\nBranches (full UUIDs verified Aug 2026):\n- Santiago Terminal: 62755ad8-2b10-4bd7-8974-0f635a2a04ef (CL-0021)
 - La Siestas: 6edfbbad-3419-43bd-9128-68363f6f6d69 (CL-0202)
 - San Isidro: 04866578-7b69-4052-80e0-85e69eba4c90 (CL-0034)
 - Villa Lucre: 8ca7ecc1-dfcf-4085-83cc-bd2166fee458 (CL-0014)\n- Brisas Golf: 2c66161e-5906-4d59-afb7-5b3f815665d9 (CL-0031)\n- Chitré: 796f2a9e-4ef6-4720-a61b-d965fc75a95c (CL-0011)\n- Sabanitas: e1df2e36-4388-4630-86b5-d73c0e668f99 (CL-0012)\n- XM Capira: f8febfe4-e89c-4892-beee-eb771ac02a5e (CL-0039)\n- San Isidro: 04866578-7b69-4052-80e0-85e69eba4c90 (CL-0034)\n- Santiago Terminal: 62755ad8-2b10-4bd7-8974-0f635a2a04ef (CL-0021)\n- La Siestas: 6edfbbad-3419-43bd-9128-68363f6f6d69 (CL-0202)\n\n> **Note**: The old `bpCode: null` issue (where BPs created via portal UI had `bpCode: null` and SO creation required passing an arbitrary string) appears resolved as of Aug 2026. All SUPER EXTRA branches now have valid bpCodes (CL-XXXX). If you encounter `\"BPCode\" failed on the 'required' tag`, pass the branch name as a string.\n\n### When Invoice is Lost — Goods Receipt as Proxy\n\nThe client's RECIBOLM system (Super Xtra) produces "Entrada de Mercancía" documents when they receive a delivery. If the original Vivero Rose invoice (Factura) is lost, this goods receipt is sufficient proof to create the sales order:\n- **Document type**: "Entrada de Mercancía" — shows supplier (VIVERO ROSE), center/location (branch), supplier invoice number (Nro. Factura Prov.), and the itemized list with quantities and unit costs.\n- **Use the supplier invoice number** (Nro. Factura Prov.) as the reference when creating the SO.\n- **Item count, quantities, and unit prices** are listed in the receipt table — use them exactly.\n- **Branch name** in the receipt (Centro field like "T030 Las Marqueza") maps to the SUPER EXTRA BP in the portal (e.g., "Super Extra Marqueza" CL-0030).\n- The "IMPORTE TOTAL" on the receipt may differ from what was in the original Factura, but use the receipt values since that's what was actually delivered and received.
@@ -629,6 +846,17 @@ Backup items + BPs to Airtable base `appIQ4f4j6c2bMPlb`.
 - Script: `scripts/alohomora.py`
 - Tables: tblTXfSmRyVPV6Tv1 (Items), tblXKTjY4kjgnPdTb (BPs)
 
+### "habra kadabra" — spell vocabulary alias (Jul 16 2026)
+User phrased a chained command as `lumos + full scan + habra kadabra`. `habra kadabra` is **NOT a synonym for `avada kedavra`** — when it follows lumos/alohomora, treat it as "whatever's next to finish the sync". When alone, ask which spell he means.
+- Resolved example (Jul 16 2026): user said `do a lumos + full scan then habra kadabra`. After lumos ran and alohomora was blocked by an expired Airtable PAT, he clarified: "no importa alohomora termina habra kadabra" — meaning just finish whatever was in flight, don't escalate to `avada kedavra` scope.
+- Do **not** default to full portal → sheet → reports → SOLD_AMOUNT sync (avada kedavra) just because the user said `habra kadabra`. That's overkill for most invocations.
+
+### alohomora reporting style — don't `clarify()` on credential expiry (Jul 16 2026)
+When alohomora fails because the hardcoded Airtable PAT at `scripts/alohomora.py:16` returns `AUTHENTICATION_REQUIRED`:
+- **Don't** call `clarify()` asking for a new PAT — CLI `clarify()` timeouts leave the user hanging mid-flow.
+- **Do** report compactly: `<skill> FAILED` + `<key prefix>` + `<line>` + `<what to paste>`. Let the user respond with the new key in their next free turn.
+- Same applies to any mid-flow credential expiry: print status + file:line + expected fix format. Wait, don't ask.
+
 #### Credential verification (run before backup if failures expected)
 ```bash
 # Portal key check
@@ -646,19 +874,76 @@ curl -s -H "Authorization: Bearer patozWFMZn8GCrcQZ.8a5a54ace302fe272c9905e94c93
 Bulk create/update items from Google Sheet rows.
 - Workflow: `references/spell-commands.md` and `references/bulk-creation-workflow.md`
 
-### avada kedavra — Full sheet update (3 tabs)
-Update all 3 tabs of the Google Sheet: INVENTARIO, REPORTS, SOLD_AMOUNT.
-- **Script**: `scripts/avada.py` — run with `~/.hermes/hermes-agent/venv/bin/python3 skills/software-development/ezy-portal-api/scripts/avada.py`
-- Fetches portal items (stock via IK key), POs (costs), SOs (sales) via API, then writes all 3 tabs
-- **⚠️ Sheet write bug**: Using `svc.spreadsheets().values().update()` with a `A1:IX00` range that's SMALLER than the existing data leaves orphan rows below. On the next read, they create phantom duplicates. Fix: use the **clear+write pattern**: clear the range, write, then clear rows below (see pattern above). Update the avada.py script to use this pattern if you see recurring duplicates.
-- **Before running**: always review COST_SARACELY column for errors. The user may say "no metas los costos todavía" — respect this and only update if asked.
+### avada kedavra — Full EZY → Sheet sync (READ → DIFF → APPLY)
+
+El ciclo completo: leer el portal, detectar diferencias, y sincronizar.
+
+**⚠️ NO ejecutes avada kedavra sin preguntar primero.** El usuario debe confirmar. Flujo completo:
+
+#### Fase 1: READ — Leer todo el portal
+```python
+# 1. Portal Items (activos, con stock y precios)
+items = fetch_paged("/api/items/items?isActive=true&expand=prices")
+# 2. Purchase Orders (todas, con líneas)
+pos = fetch_paged("/api/commerce/purchase-orders?")
+po_details = [fetch_po_detail(po['id']) for po in pos]  
+# 3. Contar: items, POs, SOs
+```
+
+#### Fase 2: DIFF — Comparar vs Sheets
+- **Items portal vs INVENTARIO**: ¿faltan items en el sheet? ¿items extra?
+- **Items con stock pero sin costo**: ¿cuántos, cuáles?
+- **Items con costo pero stock=0**: ¿cuántos, cuáles?
+- **INVENTARIO vs REPORTS**: ¿el costo en REPORTS coincide con la unión de todos los suppliers en INVENTARIO?
+
+**Reportar diferencias en formato compacto** — número de items faltantes/extra/sin costo. NO corregir todavía.
+
+#### Fase 3: APPLY — Sincronizar (solo si el usuario confirma)
+1. **INVENTARIO**: Actualizar stock, costos por supplier (columnas D-J)
+2. **REPORTS**: Recalcular costo (unión de suppliers), sale, margin %
+3. **SOLD_AMOUNT**: Recalcular ventas desde SOs, distribuir descuentos
+4. **VENTAS_JUNIO** (o mes actual): Ordenar por referencia, actualizar totales
+
+**Después de cada APPLY, correr auditoría:**
+- Verificar: `Items con stock sin costo = 0`
+- Verificar: `REPORTS costo == union(INVENTARIO costs)`  
+- Verificar: `TOTAL SOLD_AMOUNT == sum(grandTotal SOs)`
+
+**⚠️ Sheet write bug**: Usar `svc.spreadsheets().values().update()` con rango `A1:IX00` más pequeño que los datos existentes deja filas huérfanas debajo. Siempre usar **clear+write**: limpiar rango, escribir, luego limpiar filas debajo.
+
+**⚠️ Reglas de no-aplicar**: Si el usuario dice "no metas los costos todavía", solo actualizar stock (col C) y NO tocar REPORTS/SOLD_AMOUNT/columnas de costo. Preguntar antes si hay ambigüedad.
+- **"no metas los costos todavía" pattern (Jul 13 2026)**: User may **block** the avada kedavra cost-write step before it runs. They DON'T want inventory items changed — only stock might be touched. Rule: if user says "no metas los costos todavía", run a **partial avada** that updates only INVENTARIO stock (column C) and skips REPORTS/SOLD_AMOUNT/SARACELY writes. If the script can't be partial, ask before running. Don't write anything until user confirms the full set vs partial set.
+- **Sheet-only cost correction preference (Jul 13 2026)**: User said "Reports está bien así, la imagen que mandé no la tomes en cuenta, solo arregla inventario". This means: ignore the customer-provided invoice image's claim that "Reports is fine" — don't touch Reports. Only fix INVENTARIO issues. When user gives an apparent contradiction, ASK before changing scope.
+- **Item rename-redirect for cost (Jul 13 2026 example)**: When the portal has separate items (e.g. `AGAVE AMARILLO`, `AGAVE VERDE` in PO-2026-000021 Agro&Gardens) but the sheet has them merged into a single canonical item (`AGAVE GIGANTE`), the cost map should attribute those PO lines to the merged target. Pattern:
+  ```python
+  manual_aliases = {
+      'AGAVE AMARILLO': 'AGAVE GIGANTE',
+      'AGAVE VERDE': 'AGAVE GIGANTE',
+      'PINO ENANO': 'PINO BONSAI',
+      # BOMBERO→ROMERO, CHOCOLATE→CHAVELITAS, NOVIAS→NOVIO CHINO handled by name_key()
+  }
+  for line in po['lines']:
+      nk = name_key(line.get('itemDescription') or line.get('itemName'))
+      if nk.upper() in manual_aliases:
+          nk = name_key(manual_aliases[nk.upper()])
+      cost_map[nk].append(line['unitPrice'])
+  ```
+  Inversely: if the user says "el costo de AGAVE GIGANTE es 5 de cost_a&g", they may mean "assign the $5 PO price I observed to that row in COST_A&G", even though the literal PO line was under a different name. Apply by overriding the column directly, then audit with the cross-reference check (see `scripts/inventory_audit_po_costs.py`).
 - **Key used**: `ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE` — confirmed working for items+POs+SOs
 - **API key rotation**: Keys can expire mid-session. If avada fails with 401, check key and ask user.
+
+**End-of-month sales CSV export (Jul 13 2026)**:
+- Run `scripts/export_sold_amount_csv.py` — writes the current SOLD_AMOUNT contents to `~/Documents/vivero_ventas/ventas_YYYY-MM.csv`.
+- User pattern: at month's end, the SOLD_AMOUNT TOTAL row is highlighted yellow as a visual cue to export. Once exported, archive the SOLD_AMOUNT tab and reset before the next month.
+- Sort VENTAS_JUNIO by reference number (extract digits from "Factura No.NNN" with `re.search(r'(\d+)', ref)` then `sort(key=ref_number)`); append a TOTAL row at the bottom. Pink NOTA_CREDITO column = portal-applied discount per row.
 
 **REPORTS tab** (A=PLANTA, B=COSTO, C=SALE, D=MARGIN %):
 - COSTO: For each item, collect all `unitPrice` values from purchase order lines across ALL suppliers. If only 1 price → `$X.XX`. If multiple → `$min-$max` (range).
 - SALE: Use the MOST RECENT `unitPrice` from a CLOSED/INVOICED sales order line for that item. Only 1 price (no range for sale). Extracted from SO line items (not from items endpoint which returns empty prices).
 - MARGIN %: `((sale - cost) / sale) * 100`. Range if cost is range: `((sale - maxCost) / sale)% - ((sale - minCost) / sale)%`.
+
+- **NOTA_CREDITO column H (Jul 13 2026)**: Add a pink background col H with the per-SO discount amount distributed proportionally to line items. Pattern: `nc_share = (line_total / sub) * (sub - grand)` for the 6 SOs that auto-applied discount; zero for the rest. Pink background: `red:1.0, green:0.85, blue:0.85`. Yellow TOTAL row: `red:1.0, green:0.95, blue:0.4` bold. Apply via `batchUpdate` with multiple `repeatCell` requests.
+- **TOTAL rounding noise (Jul 13 2026, hard pitfall)**: When you compute per-row `TOTAL_SALE` while iterating SOs, accumulate the unrounded float in a separate variable. If you `round()` each per-row value before summing for the TOTAL row, the sum drifts ~$18 from true portal `grandTotal` because of accumulated rounding. After writing the sheet, the TOTAL row's D and E must reflect the unrounded sum — write them with a discrete `values().update()` call. Verify: `Sheet TOTAL_SALE == sum(grandTotal from portal)` (zero drift allowed).
 
 **SOLD_AMOUNT tab** (A=PLANTA, B=AMOUNT_SOLD, C=TOTAL_COST, D=TOTAL_SALE, E=TOTAL):
 - ⚠️ Tab name has a trailing space: `'SOLD_AMOUNT '` (use quotes in API calls).
@@ -668,8 +953,8 @@ Update all 3 tabs of the Google Sheet: INVENTARIO, REPORTS, SOLD_AMOUNT.
 - TOTAL: TOTAL_SALE − TOTAL_COST.
 - Last row (TOTAL in column A): sum of all above rows for each column.
 - Fetch all SOs (any status), fetch each SO individually with `expand=lines` to get line items.
-- Fetch all POs, fetch each individually with `expand=lines` to get unit costs per item.
-- Match items by **normalized name** (NFKD + uppercase + strip accents), not by itemCode.
+- Fetch all POs, fetch each individually with `expand=lines` to return actual line item unitCosts.
+- Match items by normalized name (NFKD + uppercase + strip accents), not by itemCode.
 ### Cost ingestion from supplier price lists (e.g., COST_SARACELY)
 
 When the user provides a physical price list (photo/scan):
@@ -677,7 +962,7 @@ When the user provides a physical price list (photo/scan):
 2. Strip container/size/PROMOCION details: `extract_base()` — remove "EN POTE...", "PROMOCION...", pot sizes, measurements
 3. Match base names to portal items using NFKD normalization
 4. **Avoid false substring matches**: e.g., "BAMBU" should NOT match "BAMBU ENTRENZAS", "ROSA" should NOT match "CALATHEA MAGESTICA ROSADA". Use exact NFKD match or word-boundary partial match, not substring contains.
-5. Write to the correct COST_ column in INVENTARIO (D-I)
+5. Write to the correct COST_ column in INVENTARIO (D-J)
 
 ### Cost range display ($min-$max) for multi-price suppliers
 
@@ -710,7 +995,7 @@ When the user provides a physical price list (photo/scan):
 2. Strip container/size/PROMOCION details: `extract_base()` — remove "EN POTE...", "PROMOCION...", pot sizes, measurements
 3. Match base names to portal items using NFKD normalization
 4. **Avoid false substring matches**: e.g., "BAMBU" should NOT match "BAMBU ENTRENZAS", "ROSA" should NOT match "CALATHEA MAGESTICA ROSADA". Use exact NFKD match or word-boundary partial match, not substring contains.
-5. Write to the correct COST_ column in INVENTARIO (D-I)
+5. Write to the correct COST_ column in INVENTARIO (D-J)
 
 ### Cost range display ($min-$max) for multi-price suppliers
 
@@ -857,9 +1142,25 @@ data = json.loads(result.stdout)
 
 ### Cost-Stock Consistency Rule (Jul 13 2026, user-defined)
 
-**Rule**: "Si tiene costo debería tener stock, si no no" — Any item with a cost value in ANY cost column (COST_MIJARDIN, COST_SARACELY, etc.) MUST have a stock value > 0. If stock is 0 or empty, all cost values for that item should be cleared.
+**Rule A**: "Si tiene stock tiene costo" — Any item with positive stock (`itemStockTotal > 0`) MUST have a cost in at least one supplier column. If stock > 0 and no cost exists, the item is an **inventory gap** that must be filled by finding its cost in POs (including previously-ignored supplier codes like COST_IAN, COST_JARDIN, SALE_PUBLIC).
 
-**Application**: lumos.py applies this rule automatically — it clears cost values for items with portal stock=0. After running lumos, verify: `Items with cost but stock=0: 0`.
+**Rule B**: "Si tiene costo debería tener stock, si no no" — Any item with a cost value in ANY cost column MUST have a stock value > 0. If stock is 0 or empty, all cost values for that item should be cleared.
+
+**Application**
+- Run `scripts/inventory_audit_po_costs.py` to find gaps
+- After FULL avada kedavra sync, verify: `Items with stock but no cost = 0`
+- During DIFF phase of avada kedavra, print `Items con stock pero SIN COSTO` section — alert if > 0
+
+**Finding costs for items with stock but no cost**:
+1. Include ALL POs, including those with non-standard `priceListCode` values (COST_IAN, COST_JARDIN, SALE_PUBLIC)
+2. Map SALE_PUBLIC → COST_SARACELY (same bpName: Vivero Sara Cely)
+3. Map COST_JARDIN → COST_MIJARDIN (same bpName: Viveros Mi Jardin)
+4. Map COST_IAN → COST_IAN (new column J)
+5. If still no match, report as genuine gap (no PO cost exists for that item)
+
+**Exceptions**: 
+- Tierras (TIERRA-NEGRA, ABONO-ORGANICO, CASCARILLA-DE-ARROZ) always at END of INVENTARIO and should have empty cost columns.
+- Tierras may have negative stock (portal-internal reconciliation issue) — don't try to fix these.
 
 **Exceptions**: Tierras (TIERRA-NEGRA, ABONO-ORGANICO, CASCARILLA-DE-ARROZ) are always at the END of INVENTARIO and should have empty cost columns (unless a specific supplier cost exists, which is rare).
 
@@ -915,7 +1216,8 @@ sheet_stock = {name: stock}    # from INVENTARIO!A:C
 - `templates/bulk-create-items.py` — bulk creation from CSV boilerplate
 
 ## Scripts
-- `scripts/lumos.py` — portal stock+price → Google Sheet (⚠️ check API key is current: script may reference old key `ten_3HW_...`. As of Jul 10 2026, working key: `ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE`. Also ensure `SALE_EXTRA` (not `SALE_SUPER`) is the price list. Range: `INVENTARIO!A1:D500`. When Google token expires, re-auth via setup.py --auth-url → --auth-code (see Google OAuth section above).)
+- `scripts/lumos.py` — portal stock+price → Google Sheet (⚠️ check API key is current: script may reference old key `ten_3HW_...`. As of Jul 10 2026, working key: `ten_YdKacbOqmKiaU96UBQWxjZ6cMZW6Y4uFpcvfx8cVrxE`. Also ensure `SALE_EXTRA` (not `SALE_SUPER`) is the price list. Range: `INVENTARIO!A1:D500`. When Google token expires, prefer inline refresh: `python3 scripts/refresh_google_token.py` — only fall back to browser re-auth via `…/vivero-google-sheets/scripts/setup.py --auth-url` when refresh fails with `invalid_grant`. After refresh, lumos continues normally.)
+- `scripts/refresh_google_token.py` — inline OAuth refresh (urllib + refresh_token). Saves a user round-trip every ~7 days.
 - `scripts/alohomora.py` — portal items+BPs → Airtable (partial)
   - **Portal key**: passed as CLI arg (`sys.argv[1]`), NOT hardcoded.
   - **Airtable key**: hardcoded at line 16 (`AIRTABLE_KEY = "patoz..."`). This key can expire — if the script fails with `AUTHENTICATION_REQUIRED`, generate a new PAT in Airtable (account settings > authentication) and update line 16.
@@ -923,6 +1225,8 @@ sheet_stock = {name: stock}    # from INVENTARIO!A:C
   - **Scheduled cron job**: `jobs.json` runs this weekly (Sun 9AM). The portal API key in the cron prompt may expire independently — if you get `"invalid API key"` from the portal, ask the user for a fresh key and update the cron job.
 - `scripts/check_sheet_gaps.py` — find portal items not in sheet, print gap report
 - `scripts/extract_excel_images.py` — extract embedded images from .xlsx for bulk import
+- `scripts/export_sold_amount_csv.py` — dump SOLD_AMOUNT to `~/Documents/vivero_ventas/ventas_YYYY-MM.csv`. Run at end of month after the yellow TOTAL cue is applied.
+- `scripts/inventory_audit_po_costs.py` — cross-reference INVENTARIO COST_* columns vs PO `unitPrice`. Catches drift like AGAVE GIGANTE missing the $5 from Agro&Gardens POs that listed it as AGAVE AMARILLO/VERDE.
 
 ## Reference Files
 - `references/purchase-orders-20260713.md` — summary of POs June 26-30 2026 (2,184 units, 7 POs, PHOTUS trace)
