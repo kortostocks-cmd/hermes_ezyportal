@@ -225,13 +225,26 @@
     "created_at": "2026-06-29T21:07:23.341313+00:00",
     "created_by": "agent",
     "last_patched_at": "2026-07-02T16:36:26.756872+00:00",
-    "last_used_at": "2026-07-06T18:11:01.775411+00:00",
-    "last_viewed_at": "2026-07-06T18:11:01.770628+00:00",
+    "last_used_at": "2026-07-20T18:21:29.132303+00:00",
+    "last_viewed_at": "2026-07-20T18:21:28.972995+00:00",
     "patch_count": 33,
     "pinned": false,
     "state": "active",
-    "use_count": 31,
-    "view_count": 31
+    "use_count": 32,
+    "view_count": 32
+  },
+  "discord-invoice-ocr": {
+    "archived_at": null,
+    "created_at": "2026-07-20T18:40:35.802767+00:00",
+    "created_by": null,
+    "last_patched_at": "2026-07-20T20:18:46.470462+00:00",
+    "last_used_at": "2026-07-20T20:17:59.211776+00:00",
+    "last_viewed_at": "2026-07-20T20:17:59.209420+00:00",
+    "patch_count": 1,
+    "pinned": false,
+    "state": "active",
+    "use_count": 5,
+    "view_count": 5
   },
   "dogfood": {
     "archived_at": null,
@@ -276,14 +289,14 @@
     "archived_at": null,
     "created_at": "2026-06-17T18:04:49.146691+00:00",
     "created_by": "agent",
-    "last_patched_at": "2026-07-16T21:16:31.722431+00:00",
-    "last_used_at": "2026-07-16T21:19:44.003463+00:00",
-    "last_viewed_at": "2026-07-16T21:19:44.000848+00:00",
-    "patch_count": 406,
+    "last_patched_at": "2026-07-20T20:17:49.858490+00:00",
+    "last_used_at": "2026-07-20T20:15:56.565233+00:00",
+    "last_viewed_at": "2026-07-20T20:15:56.561384+00:00",
+    "patch_count": 419,
     "pinned": false,
     "state": "active",
-    "use_count": 289,
-    "view_count": 289
+    "use_count": 307,
+    "view_count": 307
   },
   "findmy": {
     "archived_at": null,
@@ -407,13 +420,13 @@
     "created_at": "2026-06-17T17:42:10.188145+00:00",
     "created_by": null,
     "last_patched_at": "2026-06-29T20:47:29.309858+00:00",
-    "last_used_at": "2026-07-09T22:04:03.749962+00:00",
-    "last_viewed_at": "2026-07-09T22:04:03.747405+00:00",
+    "last_used_at": "2026-07-20T18:09:21.791514+00:00",
+    "last_viewed_at": "2026-07-20T18:09:21.789115+00:00",
     "patch_count": 1,
     "pinned": false,
     "state": "active",
-    "use_count": 5,
-    "view_count": 5
+    "use_count": 6,
+    "view_count": 6
   },
   "hermes-agent-skill-authoring": {
     "archived_at": null,
@@ -654,13 +667,13 @@
     "created_at": "2026-06-24T18:09:54.821259+00:00",
     "created_by": null,
     "last_patched_at": null,
-    "last_used_at": null,
-    "last_viewed_at": null,
+    "last_used_at": "2026-07-20T17:27:23.270742+00:00",
+    "last_viewed_at": "2026-07-20T17:27:23.257037+00:00",
     "patch_count": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 0,
-    "view_count": 0
+    "use_count": 1,
+    "view_count": 1
   },
   "opencode": {
     "archived_at": null,
@@ -770,27 +783,27 @@
     "archived_at": null,
     "created_at": "2026-07-07T20:06:33.230748+00:00",
     "created_by": null,
-    "last_patched_at": "2026-07-10T17:03:51.682460+00:00",
-    "last_used_at": "2026-07-10T16:55:36.487690+00:00",
-    "last_viewed_at": "2026-07-10T16:55:36.485177+00:00",
-    "patch_count": 15,
+    "last_patched_at": "2026-07-20T20:12:30.199289+00:00",
+    "last_used_at": "2026-07-20T20:10:42.522125+00:00",
+    "last_viewed_at": "2026-07-20T20:10:42.518881+00:00",
+    "patch_count": 18,
     "pinned": false,
     "state": "active",
-    "use_count": 11,
-    "view_count": 11
+    "use_count": 21,
+    "view_count": 21
   },
   "protego": {
     "archived_at": null,
     "created_at": "2026-07-03T13:38:53.234494+00:00",
     "created_by": null,
     "last_patched_at": "2026-07-03T13:49:39.218563+00:00",
-    "last_used_at": "2026-07-07T17:57:09.118713+00:00",
-    "last_viewed_at": "2026-07-07T17:57:09.116184+00:00",
+    "last_used_at": "2026-07-20T18:40:35.805129+00:00",
+    "last_viewed_at": "2026-07-20T18:40:35.797973+00:00",
     "patch_count": 2,
     "pinned": false,
     "state": "active",
-    "use_count": 4,
-    "view_count": 4
+    "use_count": 6,
+    "view_count": 6
   },
   "python-debugpy": {
     "archived_at": null,

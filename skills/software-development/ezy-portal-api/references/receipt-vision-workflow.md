@@ -15,11 +15,20 @@ rotated = img.rotate(90, expand=True)
 rotated.save("/tmp/factura_NNN_rotated.jpg", quality=95)
 ```
 
-3. **Use vision_analyze on rotated copy**:
-```python
-vision_analyze(image_url="/tmp/factura_NNN_rotated.jpg",
-    question="Lee CLARAMENTE los valores de esta factura...")
-```
+3. **Extract text from image** — use ONE of:
+
+   **Method A (preferred): vision_analyze** — when available in the session:
+   ```python
+   vision_analyze(image_url="/tmp/factura_NNN_rotated.jpg",
+       question="Lee CLARAMENTE los valores de esta factura...")
+   ```
+
+   **Method B (Swift/Vision fallback)**: When vision_analyze is unavailable (CLI-only session) and tesseract not installed, use macOS built-in Vision framework:
+   ```bash
+   swift /path/to/skills/software-development/ezy-portal-api/scripts/ocr_invoice.swift /tmp/factura.jpg 2>&1
+   ```
+   Uses `VNRecognizeTextRequest` with `.accurate` level. Output is raw OCR text line by line.
+   **Pitfall**: Raw OCR garbles names — "SAMIAOCULA"=ZAMIOCULCA, "AMAOCUILA"=AJI BOLITA, "EQUENO"=PEQUENO, "MEGRA"=NEGRA, "SAMIAOCULA"=ZAMIOCULCA. Always map through the correction table.
 
 4. **Compare quantities** against the invoice total to validate:
    - Line-level: `qty x unitPrice == subtotal` should match

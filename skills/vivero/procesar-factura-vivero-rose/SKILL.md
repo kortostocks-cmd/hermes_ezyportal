@@ -13,16 +13,25 @@ tags: [ezy, factura, vivero-rose, super-xtra, sales-order, protego]
 
 ## Requisitos previos
 - Cargar skill `ezy-portal-api` (tiene auth, endpoints, price lists)
-- API key activa: `ten_6lRpIW7SBXsZOHylXp80MTf-qFAdW-DjKWJITOdF6bk`
+- API key activa: leer de `$EZY_PORTAL_API_KEY` (env var). Si falla (401), pedir al usuario una nueva key.
 - Tenant: `vivero.ezyts.com`
 - Usar `curl` via subprocess para todas las llamadas API (urllib da 401 con keys nuevas)
 - Siempre verificar items activos antes de incluirlos en SO
 - Precio de factura se pone manualmente como unitPrice, no se usa precio del portal
 
+## Estilo de respuesta
+**Este usuario quiere respuestas cortas y directas.** No expliques de más, no muestres 30 líneas de explicación, no des contexto innecesario. Prefiere:
+- Tablas compactas de items
+- Confirmación simple ("¿Creo el SO?")
+- Resultado en 1 línea ("✅ SO-2026-000XXX | N líneas | $X.XX | DRAFT")
+- Si ya sabes lo que hacer, hazlo sin preguntar de más
+
 ## Pasos
 
 ### 1. Extraer datos de la imagen
-Usar `vision_analyze` para extraer:
+Usar **uno** de estos métodos para leer la imagen:
+
+**Método A (preferido): vision_analyze** — cuando esté disponible en la sesión:
 - Número de factura ("Factura No.XXX")
 - Fecha (documentDate)
 - Cliente y sucursal (de la dirección: El Lago, Sabanitas, etc.)
@@ -31,7 +40,33 @@ Usar `vision_analyze` para extraer:
 - Notas rojas: MC, N/C u otras anotaciones manuscritas
 - Total
 
-**⚠️ Factura No. no visible**: A veces el número de factura está cortado en la foto. Si no se ve, usar `"Factura {sucursal} {fecha}"` como reference (ej. "Factura Aguadulce 22/06/2026").
+**Método B (Swift/Vision — macOS, preferido cuando vision_analyze no está disponible)**: Usar el framework Vision de macOS (Apple OCR nativo):
+
+```bash
+# PRIMERO compilar (swift script.swift sin compilar TIMEOUT)
+swiftc -o /tmp/ocr_swift /path/to/scripts/ocr_swift.swift
+# LUEGO ejecutar
+/tmp/ocr_swift /ruta/imagen.jpg 2>&1
+```
+
+Los scripts ya existen en:
+- `~/.hermes/profiles/ezy_portal_expert/scripts/ocr_swift.swift`
+- `~/.hermes/profiles/ezy_portal_expert/scripts/ocr_swift.sh`
+
+Usa `VNRecognizeTextRequest` con nivel `.accurate`. Output es texto crudo línea por línea.
+
+**Pitfall de compilación**: `swift script.swift` (interpretado) TIMEOUT porque compila cada vez. Siempre `swiftc -o /tmp/ocr_swift` primero.
+
+**Pitfall de OCR**: El OCR crudo distorsiona nombres — ej. "SAMIAOCULA"=ZAMIOCULCA, "EQUENO"=PEQUENO, "MEGRA"=NEGRA, "CATUS"=CACTUS. Mapear siempre usando la tabla de corrección de nombres.
+
+**Método C (ocrapp.com)**: Cuando Swift no funciona, probar con OCR API externa:
+```bash
+curl -s -X POST "https://r.iamz.top/api/ocr" -H "Content-Type: application/json" \
+  -d "{\"image\":\"$(base64 -i /path/to/img | tr -d '\n')\"}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('text',''))"
+```
+⚠️ Este servicio externo puede caer. Siempre probar Swift primero.
+
+**⚠️ Factura No. no visible**: A veces el número de factura está cortado en la foto. Si no se ve, usar `"Factura {sucursal} {fecha}"` como reference (ej. "Factura Aguaduce 22/06/2026").
 
 ### 2. Identificar sucursal de Super Xtra
 De la dirección en la factura determinar la sucursal:

@@ -84,9 +84,12 @@ https://vivero.ezyts.com
 
 ## vivero Tenant (Panamá)
 
-### User Preferences
-- **Language**: Spanish only. Respond concisely — no explanations, no theory, no "what would you like to do next". Just data, status, next action.
-- **Style**: Deliver working artifacts backed by real tool output. Do not stop after writing a plan or stub. Keep executing until the artifact is complete.
+### User Preferences (CRITICAL — DO NOT VIOLATE)
+- **Language**: Spanish only. Zero English filler. Zero Spanglish.
+- **ULTRA concise**: User repeatedly corrected verbosity: "no lo veo", "habla mas claro", "arreglate tu porque estas hablando mucho", "entiendes algo resumelo habla mas claro". These are commands, not suggestions.
+- **NO meta-commentary EVER**: Never narrate your thinking, apologize, explain what you're about to do, add footnotes, or write parenthetical asides. Meta-commentary = "estas hablando mucho". Just data and the question.
+- **Formatting**: Clean, compact, proper column alignment. Tables only. NEVER raw JSON or paragraph descriptions. "no lo veo" means formatting failed — fix immediately.
+- **Style**: Deliver working artifacts backed by real tool output. Do not stop after a plan or stub.
 - **Data integrity is critical**: If a dedup check produces a skip list, the user expects those items to ALSO end up in the target sheet, not just the portal. Missing data will be caught and called out.
 - **Report final counts clearly**: "44 created, 47 skipped, 210 total in sheet" — tabular, not prose.
 
@@ -163,6 +166,8 @@ These are still created as `itemType: "stock"`, `isSellable: true` — they are 
 
 ### Stock Field
 Use `itemStockTotal` — NOT `stockTotal` (doesn't exist). Use `itemAvailableTotal` for stock excluding pending orders.
+
+**Tax Category EXCENTO**: `097722df-e70c-4380-9372-a863c67c2bca` (verified Jul 2026, exempt). The old tax ID `097722df-e70c-4380-9372-a0700fb0b831` does NOT exist — always use the EXCENTO ID above.
 
 ### Price List IDs (Verified Jul 2026)
 
@@ -499,6 +504,7 @@ Key differences from Sales Quotations:
   - Brisas Golf: `2c66161e-5906-4d59-afb7-5b3f815665d9` (CL-0031)
   - Llano Largo: `66b73c67-0ef4-4dd7-9303-994cb04b44ac` (CL-0029)
   - Ojo de Agua: `3d1ac95d-fb0b-4aab-b9fb-f5d3f26c8ae8` (CL-0007)
+  - Ojo de Agua: `3d1ac95d-fb0b-4aab-b9fb-f5d3f26c8ae8` (CL-0007)
 
 **⚠️ BP UUID drift pitfall (observed Jul 10 2026)**: stale/truncated UUIDs in memory caused `Business partner: business partner not found` (422) errors. Always pass the **full** UUID, not fragments. When you hit this 422, immediately re-fetch via `GET /api/business-partners/bp?perPage=100` and grep by name — don't retry the same UUID.
 
@@ -512,10 +518,8 @@ The user manages **10+ customer branches** of SUPER EXTRA (same RUC 356-19-77860
 1. **via israel** (CL-0035, id=32249c40-4c89-4fdf-a381-73969dba188d)
 2. **los pueblos** (CL-0005, id=a8cea960-d200-4222-8654-6cda0093d6b9)
 3. **albrook** (CL-0017, id=db64ad3e-a54c-4f15-b15b-d60dba3917a4)
-4. **monterico** (CL-0006, id=083fb553-ca57-4678-ba12-9ae1cf4b90ed)
-13. **Chanis** (CL-0040, id=d73abea9-fac1-43ac-9c1b-236c3c06b358)
-14. **4 Altos** (CL-0036, id=46765852-9ebe-48ba-8019-eac6b22281a3)
-7. **las tablas** (CL-0024, id=cbb72b57-a924-408d-9772-ca7de21834ae)
+- **Chanis**: CL-0040 (d73abea9-fac1-43ac-9c1b-236c3c06b358)
+- **Chanis**: CL-0040 (d73abea9-fac1-43ac-9c1b-236c3c06b358)
 8. **chorrera** (CL-0002, id=3d7f8040-61ea-45dd-b42d-97721513f018) — was renamed from generic "chorrera" to "SUPER EXTRA chorrera" Aug 2026, new UUID)\n9. **Marqueza** (CL-0030, id=36ebc81e-c06d-450a-88e9-ad722e3bcd73)\n10. **condado** (CL-0010, id=15ee6af1-c661-45a1-acd9-7e62a8cd3c3d)\n11. **aguadulce** (CL-0027, id=d9cd6c5e-9886-41df-a3a8-4d30ede82a7a)\n12. **penonome** (CL-0028, id=b3b486a9-bb07-4670-841c-fe4c95eead1a)\n13. **Chanis** (CL-0040, id=d73abea9-fac1-43ac-9c1b-236c3c06b358)\n14. **las acacias** (CL-0004, id=6bf480fd-4f62-41da-a4a6-353541fce16f)
 
 **Price list per client type:**
@@ -784,7 +788,10 @@ ENA | HIERBA BUENA |
 ### VR Item Code Pattern\nItems from Vivero Rose with "VR" suffix in their invoice name often have item codes WITHOUT the `-VR` suffix in the portal:\n- HIERBA BUENA VR → code: `PL-HIERBA-BUENA` (NOT PL-HIERBA-BUENA-VR)\n- RUDA VR → code: `PL-RUDA`\n- ROMERO VR → code: `PL-ROMERO`\n- OREGANO VR → code: `PL-OREGANO`\n- CHAVELITAS VR → code: `PL-CHAVELITAS`\n- MENTA VR → code: `PL-MENTA`\nAlways search by both with and without VR suffix when using by-code endpoint.\n\n### Super Xtra Branch Codes (complete list)\nBranches of SUPER EXTRA / Super Xtra (same RUC 356-19-77860):\n- via israel: CL-0035 (32249c40...)\n- los pueblos: CL-0005 (a8cea960...)\n- albrook: CL-0017 (db64ad3e...)\n- monterico: CL-0006 (083fb553...)\n- el Lago: CL-0019 (78532e5e...)\n- las acacias: CL-0004 (6bf480fd...)\n- las tablas: CL-0024 (cbb72b57...)\n- chorrera: CL-0002 (3d7f8040...)\n- marqueza: CL-0030 (36ebc81e...)\n- condado: CL-0010 (15ee6af1...)\n- aguadulce: CL-0027 (d9cd6c5e...)\n- penonome: CL-0028 (b3b486a9...)\n- **4 Altos**: CL-0036 (46765852-9ebe-48ba-8019-eac6b22281a3)\n- **Chanis**: CL-0040 (d73abea9-fac1-43ac-9c1b-236c3c06b358)\n\nBranches (full UUIDs verified Aug 2026):\n- Santiago Terminal: 62755ad8-2b10-4bd7-8974-0f635a2a04ef (CL-0021)
 - La Siestas: 6edfbbad-3419-43bd-9128-68363f6f6d69 (CL-0202)
 - San Isidro: 04866578-7b69-4052-80e0-85e69eba4c90 (CL-0034)
-- Villa Lucre: 8ca7ecc1-dfcf-4085-83cc-bd2166fee458 (CL-0014)\n- Brisas Golf: 2c66161e-5906-4d59-afb7-5b3f815665d9 (CL-0031)\n- Chitré: 796f2a9e-4ef6-4720-a61b-d965fc75a95c (CL-0011)\n- Sabanitas: e1df2e36-4388-4630-86b5-d73c0e668f99 (CL-0012)\n- XM Capira: f8febfe4-e89c-4892-beee-eb771ac02a5e (CL-0039)\n- San Isidro: 04866578-7b69-4052-80e0-85e69eba4c90 (CL-0034)\n- Santiago Terminal: 62755ad8-2b10-4bd7-8974-0f635a2a04ef (CL-0021)\n- La Siestas: 6edfbbad-3419-43bd-9128-68363f6f6d69 (CL-0202)\n\n> **Note**: The old `bpCode: null` issue (where BPs created via portal UI had `bpCode: null` and SO creation required passing an arbitrary string) appears resolved as of Aug 2026. All SUPER EXTRA branches now have valid bpCodes (CL-XXXX). If you encounter `\"BPCode\" failed on the 'required' tag`, pass the branch name as a string.\n\n### When Invoice is Lost — Goods Receipt as Proxy\n\nThe client's RECIBOLM system (Super Xtra) produces "Entrada de Mercancía" documents when they receive a delivery. If the original Vivero Rose invoice (Factura) is lost, this goods receipt is sufficient proof to create the sales order:\n- **Document type**: "Entrada de Mercancía" — shows supplier (VIVERO ROSE), center/location (branch), supplier invoice number (Nro. Factura Prov.), and the itemized list with quantities and unit costs.\n- **Use the supplier invoice number** (Nro. Factura Prov.) as the reference when creating the SO.\n- **Item count, quantities, and unit prices** are listed in the receipt table — use them exactly.\n- **Branch name** in the receipt (Centro field like "T030 Las Marqueza") maps to the SUPER EXTRA BP in the portal (e.g., "Super Extra Marqueza" CL-0030).\n- The "IMPORTE TOTAL" on the receipt may differ from what was in the original Factura, but use the receipt values since that's what was actually delivered and received.
+- **Villa Lucre**: 8ca7ecc1-dfcf-4085-83cc-bd2166fee458 (CL-0014)
+- **Brisas Golf**: 2c66161e-5906-4d59-afb7-5b3f815665d9 (CL-0031)
+- **Villa Lobos**: bf0fa375-e60e-482a-abad-0692bb732da7 (CL-0032) — NOT CL-0031 (that's Brisas del Golf). Verified Jul 20 2026.
+- **Chitré**: 796f2a9e-4ef6-4720-a61b-d965fc75a95c (CL-0011)\n- Sabanitas: e1df2e36-4388-4630-86b5-d73c0e668f99 (CL-0012)\n- XM Capira: f8febfe4-e89c-4892-beee-eb771ac02a5e (CL-0039)\n- San Isidro: 04866578-7b69-4052-80e0-85e69eba4c90 (CL-0034)\n- Santiago Terminal: 62755ad8-2b10-4bd7-8974-0f635a2a04ef (CL-0021)\n- La Siestas: 6edfbbad-3419-43bd-9128-68363f6f6d69 (CL-0202)\n\n> **Note**: The old `bpCode: null` issue (where BPs created via portal UI had `bpCode: null` and SO creation required passing an arbitrary string) appears resolved as of Aug 2026. All SUPER EXTRA branches now have valid bpCodes (CL-XXXX). If you encounter `\"BPCode\" failed on the 'required' tag`, pass the branch name as a string.\n\n### When Invoice is Lost — Goods Receipt as Proxy\n\nThe client's RECIBOLM system (Super Xtra) produces "Entrada de Mercancía" documents when they receive a delivery. If the original Vivero Rose invoice (Factura) is lost, this goods receipt is sufficient proof to create the sales order:\n- **Document type**: "Entrada de Mercancía" — shows supplier (VIVERO ROSE), center/location (branch), supplier invoice number (Nro. Factura Prov.), and the itemized list with quantities and unit costs.\n- **Use the supplier invoice number** (Nro. Factura Prov.) as the reference when creating the SO.\n- **Item count, quantities, and unit prices** are listed in the receipt table — use them exactly.\n- **Branch name** in the receipt (Centro field like "T030 Las Marqueza") maps to the SUPER EXTRA BP in the portal (e.g., "Super Extra Marqueza" CL-0030).\n- The "IMPORTE TOTAL" on the receipt may differ from what was in the original Factura, but use the receipt values since that's what was actually delivered and received.
 - **"Comenzamos de nuevo" pattern**: When the user says "comenzamos de nuevo una por una", they want to restart processing — delete any previously created SO for that invoice and process the goods receipt version instead. The goods receipt (Entrada de Mercancía) is usually more accurate since it reflects what was actually received.
 
 ### Bulk Import Name Overrides (Jul 6 2026)
@@ -1139,6 +1146,15 @@ result = subprocess.run(["curl", "-s", "-H", f"X-Api-Key: {API_KEY}", "-H", "Use
     capture_output=True, text=True, timeout=30)
 data = json.loads(result.stdout)
 ```
+
+### Negative Stock Handling (Jul 2026, user rule)
+
+**Keep negative stock visible** — do NOT auto-correct to 0. The user wants to see `-N` for reorder signals. Rules:
+- Stock can be positive, zero, OR negative in the sheet
+- Negative stock shows what needs to be reordered
+- Portal-internal items (tierras, abonos) may show large negative values (-1057 for TIERRA NEGRA, -228 for CASCARILLA, -216 for ABONO) — this is a portal reconciliation issue, NOT a sheet bug
+- **Never PATCH stock via API for tierras** — X-Api-Key has read-only stock access anyway
+- The `lumos` script preserves negative stock values from the portal — it does not clamp to 0
 
 ### Cost-Stock Consistency Rule (Jul 13 2026, user-defined)
 

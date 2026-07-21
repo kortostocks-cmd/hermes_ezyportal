@@ -6,6 +6,24 @@ Workflow for reading Vivero Rose supplier invoices and converting them to EZY Po
 
 User sends a photo of a printed invoice (factura) from a supplier (Vivero Cely, Vivero Mi Jardín, Vivero Ian, etc.) and asks to create a sales order for a specific SUPER EXTRA branch.
 
+## URL-based OCR (Discord attachments)
+
+When processing invoice images sent via Discord (or any URL):
+
+1. Script `scripts/download_ocr.sh <image_url>` downloads + OCRs in one step
+2. Downloads to /tmp/, runs ocr_invoice.swift (Apple Vision), cleans up
+3. No API keys needed — purely local macOS OCR
+4. Process extracted text identically to local-file OCR
+
+## Item Auto-Creation (on-the-fly)
+
+When an item code in an invoice is NOT FOUND in the portal:
+
+1. Create the item with minimal payload (itemCode, name, description, isActive=true, EXCENTO tax)
+2. Do NOT ask user for permission — create it silently (user confirmed: items nuevos se crean on-the-fly sin preguntar)
+3. After creation, use the new item's id in the SO lines payload
+4. Validated: PEPERONIA SANDIA VR (PL-PEPERONIA-SANDIA) created and used in same SO run
+
 ## Critical Rules
 
 1. **NO MEZCLAR FACTURAS** — Each invoice is processed independently. Never combine line items from multiple invoices unless the user explicitly says "juntame todas" or "suma todo".
